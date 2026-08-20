@@ -2,26 +2,31 @@
 
 Six weather models' archived forecasts (fetched by ``fetch_forecasts.py`` from
 the Open-Meteo Historical Forecast API) are compared with ERA5 hourly 10 m wind
-(u10/v10) at the same grid points inside the area of interest. The model learns
-one weight per forecast source so that the weighted blend
+(u10/v10) at the same grid points inside the area of interest. TWO weights are
+learned per forecast model — one for wind speed, one for wind direction:
 
-    u_blend = sum_m w_m * u_m ,   v_blend = sum_m w_m * v_m ,
-    w_m >= 0 ,  sum_m w_m = 1
+    speed:      s_blend = sum_m ws_m * s_m
+    direction:  e_blend = sum_m wd_m * e_m ,  e_m = unit vector of model m's
+                wind direction; the blended direction is the angle of e_blend
 
-is as close as possible (least squares on the wind *vector*) to ERA5. The
-simplex constraint keeps the weights interpretable: w_m is literally "how much
-to trust model m".
+    ws_m, wd_m >= 0 ,  sum ws = sum wd = 1
+
+Direction is circular, so it is blended through unit vectors (350 deg and
+10 deg must average to 0 deg, not 180 deg); the weights are fit by least
+squares on the unit-vector components against ERA5's unit vector. The simplex
+constraint keeps every weight interpretable as "how much to trust model m".
 
 Evaluation is honest: weights are fit on the first 75% of the record
 (chronological) and every reported score is from the held-out final 25%,
-compared against each individual model, the equal-weight ensemble, and an
-unconstrained least-squares reference.
+compared against each individual model and the equal-weight ensemble.
+Direction fitting/scoring uses only hours with ERA5 speed > 2 m/s, where a
+direction is physically meaningful.
 
 Outputs (forecast_blend/results/):
-    weights.json      learned weights + training metadata
-    metrics.csv       per-source test metrics (vector RMSE, speed RMSE/MAE,
-                      direction MAE, bias)
-    blend_evaluation_{light,dark}.png   weights + test-RMSE comparison figure
+    weights.json      learned speed + direction weights and training metadata
+    metrics.csv       per-source test metrics (speed RMSE/MAE/bias,
+                      direction MAE)
+    blend_evaluation_{light,dark}.png   weights + test-accuracy figure
 
 Run from the repository root (after fetch_forecasts.py):
     python forecast_blend/train_blend.py
@@ -46,7 +51,7 @@ RESULTS = HERE / "results"
 
 POINTS = [(52.0, 2.5), (52.0, 4.0), (52.5, 3.0), (53.0, 3.5)]
 TRAIN_FRACTION = 0.75
-MS_TO_KT = 1.0 / 0.514444
+MIN_TRUTH_SPEED = 2.0  # m/s; below this a wind direction is meaningless
 
 SOURCES = ["ecmwf", "gfs", "icon", "arpege", "harmonie", "ukmo"]
 LONG_NAME = {
@@ -67,12 +72,12 @@ THEMES = {
     "light": dict(
         surface="#fcfcfb", primary="#0b0b0b", secondary="#52514e",
         muted="#898781", grid="#e1e0d9", axis="#c3c2b7",
-        bar="#86b6ef", accent="#104281", faint="#d7d6cd",
+        bar="#86b6ef", accent="#104281",
     ),
     "dark": dict(
         surface="#1a1a19", primary="#ffffff", secondary="#c3c2b7",
         muted="#898781", grid="#2c2c2a", axis="#383835",
-        bar="#3987e5", accent="#9ec5f4", faint="#3d3d3a",
+        bar="#3987e5", accent="#9ec5f4",
     ),
 }
 
@@ -137,13 +142,20 @@ def fit_simplex_weights(X, y):
     return w / w.sum()
 
 
-# --- metrics -----------------------------------------------------------------
+# --- angles ------------------------------------------------------------------
 def speed(u, v):
     return np.hypot(u, v)
 
 
 def direction_from(u, v):
+    """Meteorological direction the wind blows FROM, degrees."""
     return (np.degrees(np.arctan2(-u, -v)) + 360.0) % 360.0
+
+
+def unit_vectors(u, v):
+    """(sin, cos) components of the FROM direction — safe near calm."""
+    s = np.maximum(speed(u, v), 1e-9)
+    return -u / s, -v / s
 
 
 def angular_error(d1, d2):
@@ -151,25 +163,33 @@ def angular_error(d1, d2):
     return np.minimum(diff, 360.0 - diff)
 
 
-def evaluate(u_pred, v_pred, u_true, v_true):
-    """Test metrics for one prediction source, in m/s and degrees."""
-    vec_rmse = float(np.sqrt(np.mean((u_pred - u_true) ** 2
-                                     + (v_pred - v_true) ** 2)))
-    sp_pred, sp_true = speed(u_pred, v_pred), speed(u_true, v_true)
-    windy = sp_true > 2.0  # direction is meaningless in near-calm air
-    dir_err = angular_error(direction_from(u_pred, v_pred)[windy],
-                            direction_from(u_true, v_true)[windy])
-    return dict(
-        vector_rmse_ms=vec_rmse,
-        speed_rmse_ms=float(np.sqrt(np.mean((sp_pred - sp_true) ** 2))),
-        speed_mae_ms=float(np.mean(np.abs(sp_pred - sp_true))),
-        speed_bias_ms=float(np.mean(sp_pred - sp_true)),
-        direction_mae_deg=float(np.mean(dir_err)),
-    )
+def blend_direction(sin_mat, cos_mat, w):
+    """Weighted mean of unit vectors -> blended direction in degrees."""
+    s, c = sin_mat @ w, cos_mat @ w
+    return (np.degrees(np.arctan2(s, c)) + 360.0) % 360.0
 
 
 # --- figure ------------------------------------------------------------------
-def make_figure(weights, metrics, split_time, n_train, n_test, mode):
+def barh_panel(ax, t, names, values, fmt, xlabel, title, colors=None, xmax=None):
+    y = np.arange(len(values))[::-1]
+    ax.barh(y, values, height=0.62,
+            color=colors if colors else t["bar"], edgecolor="none", zorder=3)
+    xmax = xmax if xmax else max(values) * 1.22
+    for yi, v in zip(y, values):
+        ax.text(v + xmax * 0.015, yi, fmt.format(v), va="center", ha="left",
+                fontsize=9, color=t["secondary"])
+    ax.set_yticks(y, names, fontsize=9)
+    ax.set_xlim(0, xmax)
+    ax.xaxis.grid(True, color=t["grid"], linewidth=1.0 * SCALE)
+    ax.set_axisbelow(True)
+    ax.set_xlabel(xlabel, fontsize=9)
+    ax.set_title(title, fontsize=10.5, fontweight="600",
+                 color=t["primary"], loc="left", pad=8)
+    for side in ("top", "right", "left"):
+        ax.spines[side].set_visible(False)
+
+
+def make_figure(ws, wd, metrics, split_time, n_train, n_test, mode):
     t = THEMES[mode]
     plt.rcParams.update({
         "font.family": "sans-serif",
@@ -182,61 +202,46 @@ def make_figure(weights, metrics, split_time, n_train, n_test, mode):
         "xtick.major.size": 0, "ytick.major.size": 0,
     })
 
-    fig, (ax_w, ax_r) = plt.subplots(1, 2, figsize=(13.5, 5.2), dpi=DPI)
-    fig.subplots_adjust(left=0.16, right=0.97, top=0.80, bottom=0.155, wspace=0.42)
+    fig, axes = plt.subplots(2, 2, figsize=(13.5, 9.6), dpi=DPI)
+    fig.subplots_adjust(left=0.16, right=0.97, top=0.885, bottom=0.085,
+                        wspace=0.42, hspace=0.42)
 
-    # panel 1: learned weights, one bar per forecast model
-    order = np.argsort(weights)[::-1]
-    names = [LONG_NAME[SOURCES[i]] for i in order]
-    vals = weights[order]
-    y = np.arange(len(vals))[::-1]
-    ax_w.barh(y, vals, height=0.62, color=t["bar"], edgecolor="none", zorder=3)
-    for yi, v in zip(y, vals):
-        ax_w.text(v + 0.012, yi, f"{v:.2f}", va="center", ha="left",
-                  fontsize=9, color=t["secondary"])
-    ax_w.set_yticks(y, names, fontsize=9)
-    ax_w.set_xlim(0, max(0.5, vals.max() * 1.22))
-    ax_w.xaxis.grid(True, color=t["grid"], linewidth=1.0 * SCALE)
-    ax_w.set_axisbelow(True)
-    ax_w.set_xlabel("learned weight", fontsize=9)
-    ax_w.set_title("Learned blend weights", fontsize=10.5, fontweight="600",
-                   color=t["primary"], loc="left", pad=8)
-    for side in ("top", "right", "left"):
-        ax_w.spines[side].set_visible(False)
+    for ax, w, what in ((axes[0, 0], ws, "speed"), (axes[0, 1], wd, "direction")):
+        order = np.argsort(w)[::-1]
+        barh_panel(ax, t, [LONG_NAME[SOURCES[i]] for i in order], w[order],
+                   "{:.2f}", "learned weight",
+                   f"Learned {what} weights", xmax=max(0.5, w.max() * 1.25))
 
-    # panel 2: held-out vector RMSE, blend vs every individual model
-    rows = [(LONG_NAME.get(s, s), metrics[s]["vector_rmse_ms"], s)
-            for s in SOURCES]
-    rows.append(("Equal-weight mean", metrics["equal"]["vector_rmse_ms"], "equal"))
-    rows.append(("Learned blend", metrics["blend"]["vector_rmse_ms"], "blend"))
-    rows.sort(key=lambda r: r[1])
-    y = np.arange(len(rows))[::-1]
-    colors = [t["accent"] if key == "blend" else t["bar"] for _, _, key in rows]
-    ax_r.barh(y, [r[1] for r in rows], height=0.62, color=colors,
-              edgecolor="none", zorder=3)
-    for yi, (_, v, _) in zip(y, rows):
-        ax_r.text(v + 0.012, yi, f"{v:.2f}", va="center", ha="left",
-                  fontsize=9, color=t["secondary"])
-    ax_r.set_yticks(y, [r[0] for r in rows], fontsize=9)
-    ax_r.set_xlim(0, max(r[1] for r in rows) * 1.16)
-    ax_r.xaxis.grid(True, color=t["grid"], linewidth=1.0 * SCALE)
-    ax_r.set_axisbelow(True)
-    ax_r.set_xlabel("wind-vector RMSE vs ERA5 (m/s), held-out test", fontsize=9)
-    ax_r.set_title("Held-out accuracy (lower is better)", fontsize=10.5,
-                   fontweight="600", color=t["primary"], loc="left", pad=8)
-    for side in ("top", "right", "left"):
-        ax_r.spines[side].set_visible(False)
+    for ax, key, fmt, xlabel, title in (
+        (axes[1, 0], "speed_rmse_ms", "{:.2f}",
+         "wind-speed RMSE vs ERA5 (m/s), held-out test",
+         "Held-out speed accuracy (lower is better)"),
+        (axes[1, 1], "direction_mae_deg", "{:.1f}",
+         "direction MAE vs ERA5 (deg), held-out test",
+         "Held-out direction accuracy (lower is better)"),
+    ):
+        rows = [(LONG_NAME[s], metrics[s][key], False) for s in SOURCES]
+        rows.append(("Equal-weight mean", metrics["equal"][key], False))
+        rows.append(("Learned blend", metrics["blend"][key], True))
+        rows.sort(key=lambda r: r[1])
+        colors = [t["accent"] if hl else t["bar"] for _, _, hl in rows]
+        barh_panel(ax, t, [r[0] for r in rows], [r[1] for r in rows],
+                   fmt, xlabel, title, colors=colors)
 
-    fig.text(0.012, 0.955, "Forecast-model blending against ERA5",
+    fig.text(0.012, 0.972, "Forecast-model blending against ERA5",
              fontsize=15, fontweight="600", color=t["primary"])
-    fig.text(0.012, 0.895,
-             "Non-negative weights (summing to 1) fit on hourly 10 m wind vectors, "
-             f"{len(POINTS)} North Sea points · train to {split_time:%Y-%m-%d} "
-             f"({n_train:,} samples), test after ({n_test:,} samples)",
+    fig.text(0.012, 0.940,
+             "Two weights per model — speed blended directly, direction blended "
+             "through unit vectors · non-negative, each set sums to 1 · "
+             f"{len(POINTS)} North Sea points, hourly · train to "
+             f"{split_time:%Y-%m-%d} ({n_train:,} samples), test after "
+             f"({n_test:,} samples)",
              fontsize=9.5, color=t["secondary"])
-    fig.text(0.012, 0.022,
+    fig.text(0.012, 0.014,
              "Truth: ERA5 hourly u10/v10 · Forecasts: Open-Meteo Historical "
-             "Forecast API (archived model runs) · highlighted bar: learned blend",
+             "Forecast API (archived model runs) · highlighted bar: learned "
+             f"blend · direction fit/scored on hours with ERA5 speed > "
+             f"{MIN_TRUTH_SPEED:.0f} m/s",
              fontsize=7.5, color=t["muted"])
 
     RESULTS.mkdir(parents=True, exist_ok=True)
@@ -254,42 +259,74 @@ def main():
     cut = df.time.quantile(TRAIN_FRACTION)
     train, test = df[df.time <= cut], df[df.time > cut]
 
-    ucols = [f"u_{s}" for s in SOURCES]
-    vcols = [f"v_{s}" for s in SOURCES]
+    def speeds(part):
+        return np.column_stack([speed(part[f"u_{s}"].to_numpy(),
+                                      part[f"v_{s}"].to_numpy())
+                                for s in SOURCES])
 
-    # stack u and v rows: one weight vector must serve both components
-    X_train = np.vstack([train[ucols].to_numpy(), train[vcols].to_numpy()])
-    y_train = np.concatenate([train["u_era5"].to_numpy(),
-                              train["v_era5"].to_numpy()])
-    w = fit_simplex_weights(X_train, y_train)
+    def units(part):
+        sin_cols, cos_cols = [], []
+        for s in SOURCES:
+            si, co = unit_vectors(part[f"u_{s}"].to_numpy(),
+                                  part[f"v_{s}"].to_numpy())
+            sin_cols.append(si)
+            cos_cols.append(co)
+        return np.column_stack(sin_cols), np.column_stack(cos_cols)
 
-    # unconstrained least squares, as a reference only
-    w_ols, *_ = np.linalg.lstsq(X_train, y_train, rcond=None)
+    # --- speed weights -------------------------------------------------------
+    s_true_train = speed(train["u_era5"].to_numpy(), train["v_era5"].to_numpy())
+    ws = fit_simplex_weights(speeds(train), s_true_train)
 
-    Xu, Xv = test[ucols].to_numpy(), test[vcols].to_numpy()
-    u_true, v_true = test["u_era5"].to_numpy(), test["v_era5"].to_numpy()
+    # --- direction weights (unit vectors, windy hours only) ------------------
+    windy_train = train[s_true_train > MIN_TRUTH_SPEED]
+    sin_t, cos_t = units(windy_train)
+    e_sin, e_cos = unit_vectors(windy_train["u_era5"].to_numpy(),
+                                windy_train["v_era5"].to_numpy())
+    wd = fit_simplex_weights(np.vstack([sin_t, cos_t]),
+                             np.concatenate([e_sin, e_cos]))
+
+    # --- held-out evaluation -------------------------------------------------
+    s_true = speed(test["u_era5"].to_numpy(), test["v_era5"].to_numpy())
+    d_true = direction_from(test["u_era5"].to_numpy(), test["v_era5"].to_numpy())
+    windy = s_true > MIN_TRUTH_SPEED
+    S = speeds(test)
+    sin_m, cos_m = units(test)
+    d_models = direction_from(-sin_m, -cos_m)  # per-model direction, degrees
+
+    def score(s_pred, d_pred):
+        err = s_pred - s_true
+        return dict(
+            speed_rmse_ms=float(np.sqrt(np.mean(err ** 2))),
+            speed_mae_ms=float(np.mean(np.abs(err))),
+            speed_bias_ms=float(np.mean(err)),
+            direction_mae_deg=float(np.mean(
+                angular_error(d_pred[windy], d_true[windy]))),
+        )
 
     metrics = {}
     for i, s in enumerate(SOURCES):
-        metrics[s] = evaluate(Xu[:, i], Xv[:, i], u_true, v_true)
+        metrics[s] = score(S[:, i], d_models[:, i])
     eq = np.full(len(SOURCES), 1.0 / len(SOURCES))
-    metrics["equal"] = evaluate(Xu @ eq, Xv @ eq, u_true, v_true)
-    metrics["blend"] = evaluate(Xu @ w, Xv @ w, u_true, v_true)
-    metrics["ols_reference"] = evaluate(Xu @ w_ols, Xv @ w_ols, u_true, v_true)
+    metrics["equal"] = score(S @ eq, blend_direction(sin_m, cos_m, eq))
+    metrics["blend"] = score(S @ ws, blend_direction(sin_m, cos_m, wd))
 
     RESULTS.mkdir(parents=True, exist_ok=True)
     with open(RESULTS / "weights.json", "w") as f:
         json.dump({
-            "weights": {s: round(float(wi), 6) for s, wi in zip(SOURCES, w)},
+            "speed_weights": {s: round(float(w), 6) for s, w in zip(SOURCES, ws)},
+            "direction_weights": {s: round(float(w), 6)
+                                  for s, w in zip(SOURCES, wd)},
             "sources": {s: LONG_NAME[s] for s in SOURCES},
-            "constraint": "w >= 0, sum(w) = 1 (least squares on u,v vectors)",
+            "constraint": "per set: w >= 0, sum(w) = 1",
+            "speed_fit": "least squares, blended speed vs ERA5 speed",
+            "direction_fit": ("least squares on direction unit vectors vs "
+                              f"ERA5, hours with ERA5 speed > "
+                              f"{MIN_TRUTH_SPEED} m/s"),
             "truth": "ERA5 hourly 10 m u/v",
             "points": POINTS,
             "train_until": str(cut),
             "n_train_hours": int(len(train)),
             "n_test_hours": int(len(test)),
-            "ols_reference_weights": {s: round(float(wi), 6)
-                                      for s, wi in zip(SOURCES, w_ols)},
         }, f, indent=2)
 
     mdf = pd.DataFrame(metrics).T
@@ -297,22 +334,26 @@ def main():
     mdf.round(4).to_csv(RESULTS / "metrics.csv")
 
     for mode in ("light", "dark"):
-        make_figure(w, metrics, cut, len(train), len(test), mode)
+        make_figure(ws, wd, metrics, cut, len(train), len(test), mode)
 
     print(f"\nlearned weights (train <= {cut:%Y-%m-%d %H:%M}):")
-    for s, wi in sorted(zip(SOURCES, w), key=lambda p: -p[1]):
-        print(f"  {LONG_NAME[s]:22s} {wi:6.3f}")
+    print(f"  {'model':22s} {'speed':>7s} {'direction':>10s}")
+    for i, s in enumerate(SOURCES):
+        print(f"  {LONG_NAME[s]:22s} {ws[i]:7.3f} {wd[i]:10.3f}")
 
     print("\nheld-out test metrics (vs ERA5):")
-    show = mdf[["vector_rmse_ms", "speed_rmse_ms", "speed_mae_ms",
-                "speed_bias_ms", "direction_mae_deg"]].round(3)
-    print(show.sort_values("vector_rmse_ms").to_string())
+    print(mdf.round(3).sort_values("speed_rmse_ms").to_string())
 
-    best_single = min(SOURCES, key=lambda s: metrics[s]["vector_rmse_ms"])
-    gain = (1 - metrics["blend"]["vector_rmse_ms"]
-            / metrics[best_single]["vector_rmse_ms"]) * 100
-    print(f"\nblend vs best single model ({LONG_NAME[best_single]}): "
-          f"{gain:+.1f}% vector-RMSE improvement on held-out data")
+    best_s = min(SOURCES, key=lambda s: metrics[s]["speed_rmse_ms"])
+    best_d = min(SOURCES, key=lambda s: metrics[s]["direction_mae_deg"])
+    gain_s = (1 - metrics["blend"]["speed_rmse_ms"]
+              / metrics[best_s]["speed_rmse_ms"]) * 100
+    gain_d = (1 - metrics["blend"]["direction_mae_deg"]
+              / metrics[best_d]["direction_mae_deg"]) * 100
+    print(f"\nspeed blend vs best single ({LONG_NAME[best_s]}): "
+          f"{gain_s:+.1f}% RMSE improvement (held-out)")
+    print(f"direction blend vs best single ({LONG_NAME[best_d]}): "
+          f"{gain_d:+.1f}% MAE improvement (held-out)")
     print(f"\nwrote {RESULTS}/weights.json, metrics.csv, "
           f"blend_evaluation_light.png, blend_evaluation_dark.png")
 

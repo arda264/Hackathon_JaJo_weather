@@ -1,11 +1,19 @@
 {
-  "weights": {
-    "ecmwf": 0.347013,
-    "gfs": 0.236248,
-    "icon": 0.228182,
-    "arpege": 0.029456,
-    "harmonie": 0.071359,
-    "ukmo": 0.087743
+  "speed_weights": {
+    "ecmwf": 0.350273,
+    "gfs": 0.238027,
+    "icon": 0.193598,
+    "arpege": 0.0,
+    "harmonie": 0.135443,
+    "ukmo": 0.082658
+  },
+  "direction_weights": {
+    "ecmwf": 0.298035,
+    "gfs": 0.219159,
+    "icon": 0.272952,
+    "arpege": 0.047509,
+    "harmonie": 0.03144,
+    "ukmo": 0.130904
   },
   "sources": {
     "ecmwf": "ECMWF IFS 0.25\u00b0",
@@ -15,7 +23,9 @@
     "harmonie": "KNMI HARMONIE-AROME",
     "ukmo": "UKMO Global 10 km"
   },
-  "constraint": "w >= 0, sum(w) = 1 (least squares on u,v vectors)",
+  "constraint": "per set: w >= 0, sum(w) = 1",
+  "speed_fit": "least squares, blended speed vs ERA5 speed",
+  "direction_fit": "least squares on direction unit vectors vs ERA5, hours with ERA5 speed > 2.0 m/s",
   "truth": "ERA5 hourly 10 m u/v",
   "points": [
     [
@@ -37,13 +47,5 @@
   ],
   "train_until": "2026-02-01 17:15:00",
   "n_train_hours": 55656,
-  "n_test_hours": 18552,
-  "ols_reference_weights": {
-    "ecmwf": 0.28351,
-    "gfs": 0.242981,
-    "icon": 0.228301,
-    "arpege": 0.043358,
-    "harmonie": 0.065567,
-    "ukmo": 0.109377
-  }
+  "n_test_hours": 18552
 }
