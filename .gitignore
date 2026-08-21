@@ -1,0 +1,6 @@
+.pixi/
+output/results/*.nc
+output/figures/
+*.pyc
+__pycache__/
+credentials/

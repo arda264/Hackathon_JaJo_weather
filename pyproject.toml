@@ -13,6 +13,8 @@ numpy = ">=2.0.0"
 pandas = ">=2.0.0"
 xarray = "*"
 geopandas = ">=1.0.1"
+netcdf4 = "*"
+dask = "*"
 
 [tool.pixi.tasks]
 python = "python"
@@ -28,7 +30,21 @@ cmocean  = "*"
 python         = "python"
 check-metocean = "python -c 'import windrose, scipy, cmocean; print(\"metocean environment OK\")'"
 
+# --- copernicus feature: Copernicus Marine access + HDF5 support ---
+[tool.pixi.feature.copernicus.dependencies]
+python = "3.13.*"
+pip = "*"
+
+[tool.pixi.feature.copernicus.pypi-dependencies]
+copernicusmarine = "*"
+h5py = "*"
+
+[tool.pixi.feature.copernicus.tasks]
+python           = "python"
+check-copernicus = "python -c 'import copernicusmarine, h5py; print(\"copernicus environment OK\")'"
+
 # --- named environments ---
 [tool.pixi.environments]
-default  = { features = [],           solve-group = "default" }
-metocean = { features = ["metocean"], solve-group = "metocean" }
+default     = { features = [],             solve-group = "default" }
+metocean    = { features = ["metocean"],   solve-group = "metocean" }
+copernicus  = { features = ["copernicus"], solve-group = "copernicus", no-default-feature = true }

@@ -79,6 +79,17 @@ Always inspect the relevant example before writing new scripts:
 | Spatial map of a percentile (e.g. current/wind speed, wave height) | `examples/velocity_percentile_map.py` |
 | Animated GIF of current/wind/wave maps over a day | `examples/hydro_wave_wind_animation.py` |
 
+## Wave steepness 
+Wave steepness is calculated as follows:
+
+Steepness = Hs / (g * Tm01**2 / (2 * pi))
+
+Where:
+- `Hs` is the significant wave height
+- `g` is the acceleration due to gravity
+- `Tm01` is the mean wave period
+- `pi` is the mathematical constant π
+
 ## Rose plots (wind / current / wave)
 
 - Use example script `examples/wind_rose.py` or `examples/current_rose.py` as a starting point.
