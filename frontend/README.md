@@ -36,15 +36,28 @@ python -m http.server 8000
 then open <http://localhost:8000/frontend/>. Opening `frontend/index.html` directly
 from disk also works — the live pages call the Open-Meteo APIs over HTTPS.
 
+For the map on `route.html`, put your Mapbox public token in `.env` at the repo
+root (copy `.env.example`) and generate the gitignored token file once:
+
+```
+python scripts/write_mapbox_token.py
+```
+
 ## Deploy on Vercel
 
-The site deploys as-is — no build step. The whole repo is served statically
-(the pages reference figures in `output/` and `forecast_blend/`), and the root
-`vercel.json` redirects `/` to `/frontend/`.
+The whole repo is served statically (the pages reference figures in `output/` and
+`forecast_blend/`), and the root `vercel.json` redirects `/` to `/frontend/`. The
+only build step is the `buildCommand` in `vercel.json`, which writes
+`frontend/assets/mapbox-token.js` from the `MAPBOX_TOKEN` environment variable —
+the token is never committed (GitHub push protection on this repo rejects it).
 
 1. [vercel.com/new](https://vercel.com/new) → import this GitHub repo.
-2. Framework preset **Other**, leave build command and output directory empty.
-3. Deploy. The site lands on `https://<project>.vercel.app/` (→ `/frontend/`).
+2. Framework preset **Other** — build command, output directory, and install
+   command all come from `vercel.json`.
+3. Project → Settings → Environment Variables → add `MAPBOX_TOKEN` with your
+   Mapbox public (`pk.`) token. Without it the site still deploys; only the
+   route map falls back to its "no token" message.
+4. Deploy. The site lands on `https://<project>.vercel.app/` (→ `/frontend/`).
 
 Or from the CLI: `npx vercel` from the repo root (then `npx vercel --prod`).
 
@@ -115,3 +128,9 @@ client-side from `route-today.json` instead.
   wind field, not the forecast GRIB, because reading the GRIB needs `pygrib`.
 - Mapbox GL is loaded from a CDN — the one external dependency on the site. If it is
   blocked, `route.html` degrades to a message and the numbers above the map still render.
+- The Mapbox token comes from `MAPBOX_TOKEN` in `.env` (local, via
+  `scripts/write_mapbox_token.py`) or in Vercel's environment variables (deploy) —
+  both routes generate the gitignored `assets/mapbox-token.js`. Use a `pk.`
+  **public** token (made to be embedded client-side) and scope it to the site's
+  URLs in the Mapbox dashboard if abuse is a concern. The map uses the stock
+  `mapbox/outdoors-v12` style, which any token can load.

@@ -1,9 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "version": 2,
-  "builds": [
-    { "src": "**/*", "use": "@vercel/static" }
-  ],
+  "framework": null,
+  "installCommand": "",
+  "buildCommand": "echo \"window.MAPBOX_TOKEN='$MAPBOX_TOKEN';\" > frontend/assets/mapbox-token.js",
+  "outputDirectory": ".",
   "redirects": [
     { "source": "/", "destination": "/frontend/" }
   ]
