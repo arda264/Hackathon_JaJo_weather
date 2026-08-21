@@ -84,6 +84,39 @@ listed **before** the `**/*` static entry, plus a rewrite from `/api/route`. Che
 the rewrite destination — the legacy builder may want `/route/api/index` without
 the extension.
 
+## API calls
+
+Every network call the site makes, verified live on 2026-08-21. All external
+calls are keyless except Mapbox.
+
+### External (browser → third-party)
+
+| Call | Made by | What / how |
+| --- | --- | --- |
+| `GET https://api.open-meteo.com/v1/forecast` | `index.html` (7 d), `wind.html` (7 d), `current.html` (3 d) via `fetchWind()` in `assets/common.js` | Hourly `wind_speed_10m`, `wind_direction_10m`, `wind_gusts_10m` for **all six models in one request** (`models=ecmwf_ifs025,gfs_global,icon_eu,meteofrance_arpege_europe,knmi_harmonie_arome_netherlands,ukmo_global_deterministic_10km`); `wind_speed_unit=ms`, `timeformat=unixtime`. Response keys come back suffixed per model (18 hourly arrays). One call per page load and per location change. No key. |
+| `GET https://marine-api.open-meteo.com/v1/marine` | `tide.html` (5 d) via `fetchMarine()` in `assets/common.js` | Hourly `sea_level_height_msl`, `wave_height`, `ocean_current_velocity`, `ocean_current_direction`; `timeformat=unixtime`. The API returns current velocity in **km/h**; the page converts to knots. No key. |
+| `GET https://api.mapbox.com/mapbox-gl-js/v3.26.0/mapbox-gl.{js,css}` | `route.html` `<head>` | Mapbox GL library from the CDN — the site's only external script. If blocked, the map degrades to a message; the rest of the page still works. |
+| Mapbox style + tile requests (`api.mapbox.com`, `events.mapbox.com`) | Mapbox GL at runtime on `route.html` | Loads `mapbox://styles/mapbox/outdoors-v12` plus its vector tiles, sprites, and glyphs, authenticated with the `pk.` token from `assets/mapbox-token.js`. Skipped entirely when no token is configured. |
+
+### Same-origin (browser → this site)
+
+| Call | Made by | What / how |
+| --- | --- | --- |
+| `POST /api/route` (JSON `{current}`, 45 s timeout) | `route.html` **Update route** button | The live optimiser. **Not deployed** (see above) — the request fails and the page falls back to the stored route, with a banner. |
+| `GET frontend/data/route-today.json` | `route.html` on load | Today's optimised route, rewritten daily by CI. |
+| `GET frontend/data/route-sample.json` | `route.html` fallback | Synthetic sample route, used only when `route-today.json` is missing and the API errors. |
+| `GET route/app/gribs/summary.json` | `route.html` on load | Forecast-cycle metadata for the header line. |
+| `GET route/app/gribs/robustness.json` | `route.html` on load | Out-of-sample robustness ranking table. |
+
+The generated figures (`output/figures/…`, PNG) are loaded as plain `<img>`
+elements, not fetches.
+
+### CI (GitHub Actions → third-party)
+
+| Call | Made by | What / how |
+| --- | --- | --- |
+| `GET https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl` | `route/fetch_forecast.py` in `.github/workflows/daily-forecast.yml` | NOAA GFS 0.25° GRIB filter: 10 m u/v wind only, corridor bounding box 51.5–53.5°N / 1.0–5.0°E, 13 forecast hours (~10 kB total). Walks back through cycles until one answers. No key. |
+
 ## Daily forecast
 
 `.github/workflows/daily-forecast.yml` runs at 11:30 UTC every day:
