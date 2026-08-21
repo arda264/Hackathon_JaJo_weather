@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DutchSail weather — overview</title>
+<script>(function(){var q=new URLSearchParams(location.search).get("theme");var t=q||localStorage.getItem("ds-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>
+<link rel="stylesheet" href="./assets/style.css">
+<script src="./assets/common.js" defer></script>
+</head>
+<body>
+
+<header class="site-header"><div class="bar">
+  <a class="brand" href="./index.html">Dutch<span>Sail</span> weather</a>
+  <nav class="site-nav">
+    <a href="./index.html" aria-current="page">Overview</a>
+    <a href="./current.html">Current</a>
+    <a href="./wind.html">Detailed wind</a>
+    <a href="./tide.html">Tide</a>
+    <a href="./forecast-blend.html">Forecast blend</a>
+  </nav>
+  <button class="theme-toggle" type="button">Theme: auto</button>
+</div></header>
+
+<main>
+  <h1 class="page-title">Southern North Sea — sailing overview</h1>
+  <p class="page-sub">
+    Are the preferred conditions there or not, and what ECMWF says for the week ahead.
+    Times are shown in your local time.
+  </p>
+
+  <div class="filter-row">
+    <label for="pt">Location</label>
+    <select id="pt"></select>
+    <span class="filter-note" id="updated"></span>
+  </div>
+
+  <div id="content" class="loading">
+    <section class="card">
+      <h3>Preferred conditions</h3>
+      <p class="card-sub">
+        Window criterion: 18–30 kt from 205–235° (SSW) or 305–335° (NW), sustained
+        ≥ 6 consecutive hours — checked against the six-model blend.
+      </p>
+      <div id="cond-now" class="status-value"></div>
+      <div id="cond-detail" class="filter-note" style="margin-top:4px"></div>
+      <div id="cond-days" class="day-strip"></div>
+    </section>
+
+    <section class="card chart-card" style="margin-top:14px">
+      <div class="chart-head">
+        <div>
+          <h3>Upcoming ECMWF wind forecast</h3>
+          <p class="card-sub">ECMWF IFS 0.25° — 10&nbsp;m wind speed for the next 7 days; arrows show where the wind blows toward.</p>
+        </div>
+      </div>
+      <div id="chart-ecmwf"></div>
+      <div id="dir-ecmwf"></div>
+    </section>
+  </div>
+
+  <div id="status"></div>
+
+  <section style="margin-top:26px">
+    <div class="nav-cards">
+      <a class="nav-card" href="./current.html">
+        <div class="nc-title">Current conditions →</div>
+        <p>Blended wind right now at sea: speed, direction, gusts, and how much the six models agree.</p>
+      </a>
+      <a class="nav-card" href="./wind.html">
+        <div class="nc-title">Detailed wind →</div>
+        <p>Seven-day hourly outlook — the blend on top of every individual model — plus the wind climatology figures.</p>
+      </a>
+      <a class="nav-card" href="./tide.html">
+        <div class="nc-title">Tide →</div>
+        <p>Sea level, next high and low water, and the tidal stream along the corridor.</p>
+      </a>
+      <a class="nav-card" href="./forecast-blend.html">
+        <div class="nc-title">Forecast blend →</div>
+        <p>How the six models are weighted against ERA5, and how much accuracy the blend buys.</p>
+      </a>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  Forecast data: Open-Meteo (live) · window criterion from <code>output/scripts/wind_window_days.py</code>.
+</footer>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const content = document.getElementById("content");
+  const status = document.getElementById("status");
+
+  const inSector = d => (d >= 205 && d <= 235) || (d >= 305 && d <= 335);
+  const qualifies = (ms, d) => {
+    if (!Number.isFinite(ms) || !Number.isFinite(d)) return false;
+    const kt = msToKt(ms);
+    return kt >= 18 && kt <= 30 && inSector(d);
+  };
+
+  async function load(point) {
+    content.classList.add("loading");
+    status.innerHTML = "";
+    try {
+      const d = await fetchWind(point, 7);
+      render(d);
+      content.classList.remove("loading");
+      document.getElementById("updated").textContent =
+        `updated ${fmtHour(new Date())} · ${point.lat.toFixed(1)}°N ${point.lon.toFixed(1)}°E`;
+    } catch (err) {
+      content.classList.remove("loading");
+      statusMsg(status, `Could not load live forecasts (${err.message}).`, () => load(currentPoint()));
+    }
+  }
+
+  function render(d) {
+    const nowI = nowIndexOf(d.times);
+    const spd = d.blendSpeed[nowI], dir = d.blendDir[nowI];
+
+    // right now
+    const met = qualifies(spd, dir);
+    const nowEl = document.getElementById("cond-now");
+    nowEl.className = `status-value ${met ? "met" : "not-met"}`;
+    nowEl.innerHTML = "";
+    const mark = document.createElement("span");
+    mark.className = "mark";
+    mark.textContent = met ? "✓" : "✗";
+    nowEl.append(mark, document.createTextNode(met ? "Conditions met right now" : "Not met right now"));
+    document.getElementById("cond-detail").textContent =
+      Number.isFinite(spd) && Number.isFinite(dir)
+        ? `blend now: ${msToKt(spd).toFixed(0)} kt (${spd.toFixed(1)} m/s) from ${compass16(dir)} ${Math.round(dir)}°`
+        : "no blend value for the current hour";
+
+    // day by day: longest consecutive qualifying run within each local day
+    const byDay = new Map();
+    for (let i = 0; i < d.times.length; i++) {
+      const key = d.times[i].toDateString();
+      if (!byDay.has(key)) byDay.set(key, { date: d.times[i], hours: [] });
+      byDay.get(key).hours.push(qualifies(d.blendSpeed[i], d.blendDir[i]));
+    }
+    const strip = document.getElementById("cond-days");
+    strip.innerHTML = "";
+    [...byDay.values()].slice(0, 7).forEach(day => {
+      let run = 0, best = 0;
+      for (const ok of day.hours) { run = ok ? run + 1 : 0; best = Math.max(best, run); }
+      const dayMet = best >= 6;
+      const cell = document.createElement("div");
+      cell.className = `day-cell ${dayMet ? "met" : "not-met"}`;
+      cell.title = `${fmtDay(day.date)}: longest qualifying stretch ${best} h (needs ≥ 6 h)`;
+      const dd = document.createElement("div");
+      dd.className = "d-day";
+      dd.textContent = fmtDay(day.date);
+      const dm = document.createElement("div");
+      dm.className = "d-mark";
+      dm.textContent = dayMet ? "✓" : "✗";
+      const dn = document.createElement("div");
+      dn.className = "d-note";
+      dn.textContent = best > 0 ? `${best} h` : "—";
+      cell.append(dd, dm, dn);
+      strip.append(cell);
+    });
+
+    // ECMWF outlook
+    const ecmwf = d.perModel.ecmwf;
+    lineChart(document.getElementById("chart-ecmwf"), {
+      times: d.times,
+      series: [{ id: "ecmwf", name: "ECMWF IFS 0.25°", color: "--s2", values: ecmwf.speed, width: 2.5, endLabel: true }],
+      unit: "m/s", decimals: 1, yMin: 0, nowIndex: nowI,
+      ariaLabel: "ECMWF wind speed forecast for the next seven days",
+    });
+    directionStrip(document.getElementById("dir-ecmwf"), d.times, ecmwf.dir, { step: 6, label: "wind" });
+  }
+
+  initPointSelect(document.getElementById("pt"), load);
+  load(currentPoint());
+});
+</script>
+
+</body>
+</html>

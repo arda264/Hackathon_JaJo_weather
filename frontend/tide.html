@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DutchSail weather — tide</title>
+<script>(function(){var q=new URLSearchParams(location.search).get("theme");var t=q||localStorage.getItem("ds-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>
+<link rel="stylesheet" href="./assets/style.css">
+<script src="./assets/common.js" defer></script>
+</head>
+<body>
+
+<header class="site-header"><div class="bar">
+  <a class="brand" href="./index.html">Dutch<span>Sail</span> weather</a>
+  <nav class="site-nav">
+    <a href="./index.html">Overview</a>
+    <a href="./current.html">Current</a>
+    <a href="./wind.html">Detailed wind</a>
+    <a href="./tide.html" aria-current="page">Tide</a>
+    <a href="./forecast-blend.html">Forecast blend</a>
+  </nav>
+  <button class="theme-toggle" type="button">Theme: auto</button>
+</div></header>
+
+<main>
+  <h1 class="page-title">Tide</h1>
+  <p class="page-sub">
+    Sea level (relative to mean sea level), the next high and low water, and the tidal
+    stream at the selected corridor point. Live from the Open-Meteo Marine API.
+  </p>
+
+  <div class="filter-row">
+    <label for="pt">Location</label>
+    <select id="pt"></select>
+    <span class="filter-note" id="updated"></span>
+  </div>
+
+  <div id="content" class="loading">
+    <div class="tiles" id="tiles"></div>
+
+    <section class="card chart-card">
+      <div class="chart-head">
+        <div>
+          <h3>Sea level — next 5 days</h3>
+          <p class="card-sub">Height above mean sea level; the next high and low water are labeled.</p>
+        </div>
+      </div>
+      <div id="chart-tide"></div>
+    </section>
+
+    <section class="card chart-card" style="margin-top:14px">
+      <div class="chart-head">
+        <div>
+          <h3>Tidal stream</h3>
+          <p class="card-sub">Ocean current speed in knots; arrows show where the stream sets toward.</p>
+        </div>
+      </div>
+      <div id="chart-current"></div>
+      <div id="current-dir"></div>
+    </section>
+
+    <section class="card chart-card" style="margin-top:14px">
+      <div class="chart-head">
+        <div>
+          <h3>Wave height</h3>
+          <p class="card-sub">Significant wave height — sea state matters as much as the tide for a crossing.</p>
+        </div>
+      </div>
+      <div id="chart-wave"></div>
+    </section>
+  </div>
+
+  <div id="status"></div>
+</main>
+
+<footer class="site-footer">Marine data: Open-Meteo Marine API (live). Sea level is a model estimate, not a tide-table prediction — verify against official tables before navigation.</footer>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const content = document.getElementById("content");
+  const status = document.getElementById("status");
+
+  async function load(point) {
+    content.classList.add("loading");
+    status.innerHTML = "";
+    try {
+      const d = await fetchMarine(point, 5);
+      render(d);
+      content.classList.remove("loading");
+      document.getElementById("updated").textContent =
+        `updated ${fmtHour(new Date())} · ${point.lat.toFixed(1)}°N ${point.lon.toFixed(1)}°E`;
+    } catch (err) {
+      content.classList.remove("loading");
+      statusMsg(status, `Could not load marine data (${err.message}).`, () => load(currentPoint()));
+    }
+  }
+
+  function render(d) {
+    const nowI = nowIndexOf(d.times);
+    const extremes = findExtremes(d.seaLevel);
+    const nextHigh = extremes.find(e => e.i > nowI && e.type === "high");
+    const nextLow = extremes.find(e => e.i > nowI && e.type === "low");
+    const level = d.seaLevel[nowI];
+    const rising = Number.isFinite(d.seaLevel[nowI + 1]) && d.seaLevel[nowI + 1] > level;
+
+    const tiles = document.getElementById("tiles");
+    tiles.innerHTML = "";
+    tiles.append(
+      tile("Sea level now", Number.isFinite(level) ? `${level >= 0 ? "+" : ""}${level.toFixed(2)}<small>m MSL</small>` : "–",
+        Number.isFinite(level) ? (rising ? "rising ↑ (flood)" : "falling ↓ (ebb)") : ""),
+      tile("Next high water", nextHigh ? `${fmtHour(d.times[nextHigh.i])}` : "–",
+        nextHigh ? `${fmtDay(d.times[nextHigh.i])} · ${d.seaLevel[nextHigh.i].toFixed(2)} m` : ""),
+      tile("Next low water", nextLow ? `${fmtHour(d.times[nextLow.i])}` : "–",
+        nextLow ? `${fmtDay(d.times[nextLow.i])} · ${d.seaLevel[nextLow.i].toFixed(2)} m` : ""),
+      tile("Tidal stream now", Number.isFinite(d.currentKt[nowI]) ? `${d.currentKt[nowI].toFixed(1)}<small>kt</small>` : "–",
+        Number.isFinite(d.currentDir[nowI]) ? `setting toward ${compass16(d.currentDir[nowI])}` : ""),
+    );
+
+    lineChart(document.getElementById("chart-tide"), {
+      times: d.times,
+      series: [{ id: "sl", name: "Sea level", color: BLEND_COLOR, values: d.seaLevel, width: 2.5 }],
+      unit: "m", decimals: 2, nowIndex: nowI,
+      annotations: [
+        ...(nextHigh ? [{ i: nextHigh.i, type: "high", text: `HW ${fmtHour(d.times[nextHigh.i])}` }] : []),
+        ...(nextLow ? [{ i: nextLow.i, type: "low", text: `LW ${fmtHour(d.times[nextLow.i])}` }] : []),
+      ],
+      ariaLabel: "Sea level relative to mean sea level, next five days",
+    });
+
+    lineChart(document.getElementById("chart-current"), {
+      times: d.times,
+      series: [{ id: "cur", name: "Stream", color: "--s2", values: d.currentKt, width: 2.5 }],
+      unit: "kt", decimals: 2, yMin: 0, nowIndex: nowI,
+      ariaLabel: "Tidal stream speed in knots, next five days",
+    });
+    directionStrip(document.getElementById("current-dir"), d.times, d.currentDir, { step: 4, label: "sets", toward: true });
+
+    lineChart(document.getElementById("chart-wave"), {
+      times: d.times,
+      series: [{ id: "wave", name: "Wave height", color: "--s3", values: d.waveHeight, width: 2.5 }],
+      unit: "m", decimals: 1, yMin: 0, nowIndex: nowI,
+      ariaLabel: "Significant wave height, next five days",
+    });
+  }
+
+  function tile(label, valueHtml, deltaText) {
+    const div = document.createElement("div");
+    div.className = "tile";
+    const l = document.createElement("div");
+    l.className = "label";
+    l.textContent = label;
+    const v = document.createElement("div");
+    v.className = "value";
+    v.innerHTML = valueHtml;
+    const dl = document.createElement("div");
+    dl.className = "delta";
+    dl.textContent = deltaText;
+    div.append(l, v, dl);
+    return div;
+  }
+
+  initPointSelect(document.getElementById("pt"), load);
+  load(currentPoint());
+});
+</script>
+
+</body>
+</html>
