@@ -1,0 +1,4 @@
+Forecast scenarios:
+{% for scenario in scenarios %}
+- {{ scenario.name }}: {{ scenario.duration_hours }}h, wind {{ scenario.wind_min }}-{{ scenario.wind_max }}kn (avg {{ scenario.wind_avg }}kn)
+{% endfor %}

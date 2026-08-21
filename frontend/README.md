@@ -17,6 +17,10 @@ Static site — no build step, no dependencies.
   height from the Open-Meteo Marine API.
 - **`forecast-blend.html`** — the blend itself: learned weights, held-out metrics
   table, and the evaluation figure.
+- **`route.html`** — the record route, Lowestoft → IJmuiden: the optimised track and
+  sampled wind on a Mapbox map, plus the out-of-sample robustness ranking from
+  `route/app/gribs/robustness.json`. This is the former standalone `dutchsail_route`
+  app, rewritten in this site's vanilla-JS style (the original used React from a CDN).
 
 ## Run
 
@@ -42,9 +46,39 @@ The site deploys as-is — no build step. The whole repo is served statically
 
 Or from the CLI: `npx vercel` from the repo root (then `npx vercel --prod`).
 
+The same `vercel.json` also builds `route/api/index.py` as a Python function and
+rewrites `/api/route` onto it, which is what makes the **Update route** control on
+`route.html` recompute live.
+
+**This endpoint is configured but unverified — check it on the first deploy.** Two
+things could not be tested locally:
+
+1. It needs `pygrib` (see `route/api/requirements.txt`) to read the forecast GRIB.
+   That is a heavy native dependency (ECCODES) and may simply not build in the
+   Vercel Python runtime.
+2. The `builds` array here is the legacy form — forced, because `pyproject.toml`
+   makes Vercel auto-detect Python for the whole repo. The Python build is listed
+   **before** the `**/*` static catch-all so it claims `route/api/index.py` first,
+   and the rewrite destination may need to be `/route/api/index` (no extension)
+   depending on how the legacy builder names its output.
+
+If either is wrong the endpoint 404s or 500s, the page falls back to the stored
+sample route (see below), and nothing else on the site is affected. Verify with
+`curl -X POST https://<project>.vercel.app/api/route -H 'Content-Type:
+application/json' -d '{"current":{"speed":1,"toward":45}}'`.
+
 ## Notes
 
 - Blend weights are embedded in `assets/common.js`; re-copy them from
   `forecast_blend/results/weights.json` after retraining.
 - Locations are the four ERA5 grid points the blend was trained on.
 - Theme toggle cycles auto → light → dark (persisted in `localStorage`).
+- `route.html` posts to `/api/route` first and falls back to the stored
+  `data/route-sample.json` whenever that endpoint is missing or errors — which is
+  always the case when the site is opened from disk or served by
+  `python -m http.server`. The page shows a banner when it is on the fallback, so the
+  sample is never passed off as a live result. Regenerate it with
+  `python route/export_sample_route.py`. It is built from the *synthetic* nominal
+  wind field, not the forecast GRIB, because reading the GRIB needs `pygrib`.
+- Mapbox GL is loaded from a CDN — the one external dependency on the site. If it is
+  blocked, `route.html` degrades to a message and the numbers above the map still render.

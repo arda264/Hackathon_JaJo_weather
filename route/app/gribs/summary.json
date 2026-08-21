@@ -1,0 +1,3 @@
+{
+  "summary": "The first scenario (grib.json) shows the fastest overall duration at 11.333 hours and a wind speed range that peaks at 13.3 knots, making it the most promising for a swift sail. The second scenario (grib2.json) has the calmest winds, averaging just 6.8 knots, which may slow down progress, while the third (grib3.json) sits in between with average winds of 7.1 knots. Keep an eye on the winds in grib2.json which are lower overall, potentially leading to tricky sailing conditions."
+}

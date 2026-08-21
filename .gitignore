@@ -2,3 +2,4 @@ wind_data/
 /wind_data/
 .agents/
 .claude/
+frontend/assets/mapbox-token.js
