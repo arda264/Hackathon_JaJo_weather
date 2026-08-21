@@ -11,10 +11,10 @@ wind-sea (VHM0_WW, VTM01_WW, VMDR_WW) drawn in red. Also computes wave
 steepness (Hs / (g * Tm01^2 / (2*pi))) for both wind-sea and swell, and
 saves the full aggregated timeseries (heights, periods, directions,
 steepness) as a NetCDF file (and an equivalent CSV file) to
-sample_forecast_data/preprocessed/.
+sample_forecast_data/postprocessed/.
 
 Run with the `metocean` pixi environment, e.g.:
-    pixi run -e metocean python scripts/check_wave_conditions_area_of_interest.py
+    pixi run -e metocean python scripts/postprocess_wave_conditions_area_of_interest.py
 """
 
 import argparse
@@ -30,7 +30,7 @@ import xarray as xr
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_SAMPLE_DIR = ROOT_DIR / "sample_forecast_data"
 DEFAULT_FIGURES_DIR = ROOT_DIR / "sample_forecast_data" / "figures"
-DEFAULT_PREPROCESSED_DIR = ROOT_DIR / "sample_forecast_data" / "preprocessed"
+DEFAULT_POSTPROCESSED_DIR = ROOT_DIR / "sample_forecast_data" / "postprocessed"
 DEFAULT_GEOJSON = ROOT_DIR / "geometry" / "area_of_interest.geojson"
 
 WIND_SEA = {"height": "VHM0_WW", "period": "VTM01_WW", "direction": "VMDR_WW"}
@@ -95,11 +95,11 @@ def main():
         help=f"Directory to save the plot to (default: {DEFAULT_FIGURES_DIR}).",
     )
     parser.add_argument(
-        "--preprocessed-directory",
+        "--postprocessed-directory",
         type=Path,
-        default=DEFAULT_PREPROCESSED_DIR,
+        default=DEFAULT_POSTPROCESSED_DIR,
         help="Directory to save the aggregated timeseries NetCDF to "
-        f"(default: {DEFAULT_PREPROCESSED_DIR}).",
+        f"(default: {DEFAULT_POSTPROCESSED_DIR}).",
     )
     args = parser.parse_args()
 
@@ -176,11 +176,11 @@ def main():
         "source_file": str(input_file),
     }
 
-    args.preprocessed_directory.mkdir(parents=True, exist_ok=True)
+    args.postprocessed_directory.mkdir(parents=True, exist_ok=True)
     start_str = np.datetime_as_string(times[0], unit="h")
     end_str = np.datetime_as_string(times[-1], unit="h")
     nc_output_file = (
-        args.preprocessed_directory
+        args.postprocessed_directory
         / f"wave_conditions_area_of_interest_{start_str}_to_{end_str}.nc"
     )
     output_ds.to_netcdf(nc_output_file)
