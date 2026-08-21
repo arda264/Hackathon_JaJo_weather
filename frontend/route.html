@@ -199,10 +199,10 @@
 document.addEventListener("DOMContentLoaded", () => {
   "use strict";
 
-  // Set in assets/mapbox-token.js, which is gitignored — GitHub push protection
-  // rejects Mapbox tokens committed to this repo. See assets/mapbox-token.example.js.
+  // Set in assets/mapbox-token.js — gitignored, generated from MAPBOX_TOKEN in
+  // .env by scripts/write_mapbox_token.py (locally) or by the Vercel build command.
   const MAPBOX_TOKEN = window.MAPBOX_TOKEN || "";
-  const MAP_STYLE = "mapbox://styles/kkataev/cmraz121a000901pcc8fhgkzv";
+  const MAP_STYLE = "mapbox://styles/mapbox/outdoors-v12";
   const TODAY_URL = "./data/route-today.json";     // rewritten daily by CI
   const SAMPLE_URL = "./data/route-sample.json";   // last-resort synthetic fallback
   const ROBUSTNESS_URL = "../route/app/gribs/robustness.json";
