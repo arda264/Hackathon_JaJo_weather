@@ -1,6 +1,8 @@
 .pixi/
 output/results/*.nc
-output/figures/
+# ignore ad-hoc figures, but the agent's outputs are published (served by Vercel)
+output/figures/*
+!output/figures/agent/
 *.pyc
 __pycache__/
 credentials/

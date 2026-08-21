@@ -49,3 +49,47 @@ them, and verifies its own output). Commit the refreshed `output/figures/agent/`
 Copernicus credentials live at `credentials/.copernicusmarine-credentials`
 (gitignored); without them the agent skips the two map figures and says so in
 `summary.json` → `notes`.
+
+## Automatic refresh (GitHub Actions)
+
+`.github/workflows/agent-refresh.yml` runs the agent daily at 05:30 UTC, commits
+whatever changed under `output/figures/agent/` + `output/results/agent/summary.json`,
+and pushes — which triggers the Vercel redeploy, exactly like the existing daily
+route job. Setup:
+
+1. **Add the Claude key** — GitHub repo → **Settings → Secrets and variables →
+   Actions → New repository secret**:
+   - Name: `ANTHROPIC_API_KEY`
+   - Value: an API key from <https://platform.claude.com> (Console → API keys).
+   This is the only required secret. **Do not put this key in Vercel** — the deploy
+   is static and never runs the agent; the key lives only in Actions.
+
+2. **(Optional) add the Copernicus credentials** so the agent can also draw the two
+   corridor map figures:
+   1. Locally, run `python scripts/get_sample_wave_forecast.py` once — it prompts
+      for your Copernicus Marine username/password and writes
+      `credentials/.copernicusmarine-credentials`.
+   2. Copy that file's *contents* into a second repository secret named
+      `COPERNICUSMARINE_CREDENTIALS`.
+   The workflow recreates the file from the secret before the run. Without it, the
+   run still succeeds — the agent skips `currents_map`/`waves_map` and notes why in
+   `summary.json`.
+
+3. **Test it** — Actions → **Agent forecast refresh** → **Run workflow**. Watch the
+   log: the runner prints every command the agent executes. On success the job
+   pushes a commit like `Agent forecast refresh: 2026-08-21 05:30Z`, and Vercel
+   redeploys from it.
+
+4. **Vercel side** — nothing agent-related to configure. The only environment
+   variable Vercel needs is `MAPBOX_TOKEN` (a public `pk.` token for the route map);
+   the site itself is served statically from what the workflow commits.
+
+Notes:
+
+- **Cost**: every run is one full agentic run on `claude-opus-5` (typically a few
+  minutes of tool use). Tune the `cron` line in the workflow to your budget, or
+  remove the `schedule` block and trigger it manually only.
+- The schedule is offset from the 11:30 UTC route job so the two never push at the
+  same time.
+- `.gitignore` ignores `output/figures/*` **except** `output/figures/agent/` — keep
+  that exception, or the workflow's commit step will silently miss the new PNGs.
