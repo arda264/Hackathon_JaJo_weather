@@ -17,42 +17,51 @@
     <a href="./current.html">Current</a>
     <a href="./wind.html">Detailed wind</a>
     <a href="./tide.html">Tide</a>
+    <a href="./forecast-blend.html">Forecast blend</a>
   </nav>
   <button class="theme-toggle" type="button">Theme: auto</button>
 </div></header>
 
 <main>
-  <h1 class="page-title">Southern North Sea — wind &amp; sailing conditions</h1>
+  <h1 class="page-title">Southern North Sea — sailing overview</h1>
   <p class="page-sub">
-    Wind climatology for the DutchSail corridor and a six-model forecast blend trained
-    against ERA5 reanalysis. Live pages use the learned blend weights on today&rsquo;s
-    Open-Meteo forecasts.
+    Are the preferred conditions there or not, and what ECMWF says for the week ahead.
+    Times are shown in your local time.
   </p>
 
-  <div class="tiles">
-    <div class="tile">
-      <div class="label">Blend speed RMSE (held-out)</div>
-      <div class="value">0.71<small>m/s</small></div>
-      <div class="delta good">−31% vs best single model (1.03)</div>
-    </div>
-    <div class="tile">
-      <div class="label">Blend direction MAE (held-out)</div>
-      <div class="value">6.1<small>°</small></div>
-      <div class="delta good">−21% vs best single model (7.7°)</div>
-    </div>
-    <div class="tile">
-      <div class="label">Models blended</div>
-      <div class="value">6</div>
-      <div class="delta">ECMWF · GFS · ICON · ARPEGE · HARMONIE · UKMO</div>
-    </div>
-    <div class="tile">
-      <div class="label">Evaluation window</div>
-      <div class="value">18,552<small>h</small></div>
-      <div class="delta">final 25% of the record, never trained on</div>
-    </div>
+  <div class="filter-row">
+    <label for="pt">Location</label>
+    <select id="pt"></select>
+    <span class="filter-note" id="updated"></span>
   </div>
 
-  <section>
+  <div id="content" class="loading">
+    <section class="card">
+      <h3>Preferred conditions</h3>
+      <p class="card-sub">
+        Window criterion: 18–30 kt from 205–235° (SSW) or 305–335° (NW), sustained
+        ≥ 6 consecutive hours — checked against the six-model blend.
+      </p>
+      <div id="cond-now" class="status-value"></div>
+      <div id="cond-detail" class="filter-note" style="margin-top:4px"></div>
+      <div id="cond-days" class="day-strip"></div>
+    </section>
+
+    <section class="card chart-card" style="margin-top:14px">
+      <div class="chart-head">
+        <div>
+          <h3>Upcoming ECMWF wind forecast</h3>
+          <p class="card-sub">ECMWF IFS 0.25° — 10&nbsp;m wind speed for the next 7 days; arrows show where the wind blows toward.</p>
+        </div>
+      </div>
+      <div id="chart-ecmwf"></div>
+      <div id="dir-ecmwf"></div>
+    </section>
+  </div>
+
+  <div id="status"></div>
+
+  <section style="margin-top:26px">
     <div class="nav-cards">
       <a class="nav-card" href="./current.html">
         <div class="nc-title">Current conditions →</div>
@@ -60,179 +69,111 @@
       </a>
       <a class="nav-card" href="./wind.html">
         <div class="nc-title">Detailed wind →</div>
-        <p>Seven-day hourly outlook — the blend on top of every individual model, direction and gusts.</p>
+        <p>Seven-day hourly outlook — the blend on top of every individual model — plus the wind climatology figures.</p>
       </a>
       <a class="nav-card" href="./tide.html">
         <div class="nc-title">Tide →</div>
         <p>Sea level, next high and low water, and the tidal stream along the corridor.</p>
       </a>
-    </div>
-  </section>
-
-  <section>
-    <h2>Forecast-model blend</h2>
-    <p class="section-sub">
-      Two learned weights per model — one for wind speed, one for wind direction — fitted so the
-      blended 10&nbsp;m wind matches ERA5 as closely as possible. All scores below come from the
-      held-out final quarter of the record.
-    </p>
-    <div class="fig-grid wide">
-      <figure class="fig">
-        <img data-light="../forecast_blend/results/blend_evaluation_light.png"
-             data-dark="../forecast_blend/results/blend_evaluation_dark.png"
-             src="../forecast_blend/results/blend_evaluation_light.png"
-             alt="Learned blend weights per model and held-out accuracy of the blend versus each individual model" loading="lazy">
-        <figcaption>Learned weights and held-out accuracy: the blend beats every individual model and the equal-weight ensemble on both speed and direction.</figcaption>
-      </figure>
-    </div>
-  </section>
-
-  <section>
-    <h2>Sailing-window climatology</h2>
-    <p class="section-sub">
-      How often the corridor offers a sailable window, from six years of ERA5 wind.
-    </p>
-    <div class="fig-grid">
-      <figure class="fig">
-        <img data-light="../output/figures/wind_window_heatmap_light.png"
-             data-dark="../output/figures/wind_window_heatmap_dark.png"
-             src="../output/figures/wind_window_heatmap_light.png"
-             alt="Heatmap of sailing-window days" loading="lazy">
-        <figcaption>Window days, month × year.</figcaption>
-      </figure>
-      <figure class="fig">
-        <img data-light="../output/figures/wind_window_seasonality_light.png"
-             data-dark="../output/figures/wind_window_seasonality_dark.png"
-             src="../output/figures/wind_window_seasonality_light.png"
-             alt="Seasonality of sailing windows" loading="lazy">
-        <figcaption>Seasonality: mean window days per month.</figcaption>
-      </figure>
-      <figure class="fig">
-        <img data-light="../output/figures/wind_window_annual_light.png"
-             data-dark="../output/figures/wind_window_annual_dark.png"
-             src="../output/figures/wind_window_annual_light.png"
-             alt="Annual sailing-window totals" loading="lazy">
-        <figcaption>Annual totals per region coverage.</figcaption>
-      </figure>
-      <figure class="fig">
-        <img data-light="../output/figures/wind_condition_share_light.png"
-             data-dark="../output/figures/wind_condition_share_dark.png"
-             src="../output/figures/wind_condition_share_light.png"
-             alt="Share of wind conditions" loading="lazy">
-        <figcaption>Share of hours by wind condition class.</figcaption>
-      </figure>
-    </div>
-  </section>
-
-  <section>
-    <h2>Window calendars</h2>
-    <p class="section-sub">Day-by-day window flags; pick how much of the corridor must qualify.</p>
-    <div class="filter-row">
-      <div class="seg" id="cal-seg" role="group" aria-label="corridor coverage">
-        <button type="button" data-pct="50" aria-pressed="true">50% of area</button>
-        <button type="button" data-pct="75" aria-pressed="false">75%</button>
-        <button type="button" data-pct="100" aria-pressed="false">100%</button>
-      </div>
-    </div>
-    <div class="fig-grid wide">
-      <figure class="fig">
-        <img id="cal-img"
-             data-light="../output/figures/wind_window_calendar_50_light.png"
-             data-dark="../output/figures/wind_window_calendar_50_dark.png"
-             src="../output/figures/wind_window_calendar_50_light.png"
-             alt="Calendar of sailing-window days" loading="lazy">
-        <figcaption id="cal-cap">Sailing-window calendar — window when ≥ 50% of the corridor qualifies.</figcaption>
-      </figure>
-    </div>
-  </section>
-
-  <section>
-    <h2>Wind climate</h2>
-    <div class="fig-grid wide">
-      <figure class="fig">
-        <img data-light="../output/figures/wind_speed_timeseries_light.png"
-             data-dark="../output/figures/wind_speed_timeseries_dark.png"
-             src="../output/figures/wind_speed_timeseries_light.png"
-             alt="Wind speed time series" loading="lazy">
-        <figcaption>10&nbsp;m wind speed over the record.</figcaption>
-      </figure>
-      <figure class="fig">
-        <img data-light="../output/figures/wind_direction_timeseries_light.png"
-             data-dark="../output/figures/wind_direction_timeseries_dark.png"
-             src="../output/figures/wind_direction_timeseries_light.png"
-             alt="Wind direction time series" loading="lazy">
-        <figcaption>Wind direction over the record.</figcaption>
-      </figure>
-    </div>
-  </section>
-
-  <section>
-    <h2>Daily windows by year</h2>
-    <div class="filter-row">
-      <label for="dw-year">Year</label>
-      <select id="dw-year"></select>
-      <div class="seg" id="dw-seg" role="group" aria-label="corridor coverage">
-        <button type="button" data-pct="50" aria-pressed="true">50%</button>
-        <button type="button" data-pct="75" aria-pressed="false">75%</button>
-        <button type="button" data-pct="100" aria-pressed="false">100%</button>
-      </div>
-    </div>
-    <div class="fig-grid wide">
-      <figure class="fig">
-        <img id="dw-img" src="../output/figures/daily_windows/daily_window_50pct_2026.png"
-             alt="Daily sailing windows for the selected year" loading="lazy">
-        <figcaption id="dw-cap">Daily windows, 2026 — ≥ 50% of corridor.</figcaption>
-      </figure>
+      <a class="nav-card" href="./forecast-blend.html">
+        <div class="nc-title">Forecast blend →</div>
+        <p>How the six models are weighted against ERA5, and how much accuracy the blend buys.</p>
+      </a>
     </div>
   </section>
 </main>
 
 <footer class="site-footer">
-  DutchSail hackathon · figures generated by <code>output/scripts</code> and <code>forecast_blend</code> ·
-  truth data: ERA5 reanalysis · forecasts: Open-Meteo.
+  Forecast data: Open-Meteo (live) · window criterion from <code>output/scripts/wind_window_days.py</code>.
 </footer>
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-  // calendar coverage switcher
-  const calImg = document.getElementById("cal-img");
-  const calCap = document.getElementById("cal-cap");
-  document.querySelectorAll("#cal-seg button").forEach(b => {
-    b.addEventListener("click", () => {
-      document.querySelectorAll("#cal-seg button").forEach(o => o.setAttribute("aria-pressed", "false"));
-      b.setAttribute("aria-pressed", "true");
-      const pct = b.dataset.pct;
-      calImg.dataset.light = `../output/figures/wind_window_calendar_${pct}_light.png`;
-      calImg.dataset.dark = `../output/figures/wind_window_calendar_${pct}_dark.png`;
-      calImg.src = effectiveTheme() === "dark" ? calImg.dataset.dark : calImg.dataset.light;
-      calCap.textContent = `Sailing-window calendar — window when ≥ ${pct}% of the corridor qualifies.`;
-    });
-  });
+  const content = document.getElementById("content");
+  const status = document.getElementById("status");
 
-  // daily windows year/coverage switcher
-  const years = [2026, 2025, 2024, 2023, 2022, 2021];
-  const ysel = document.getElementById("dw-year");
-  years.forEach(y => {
-    const o = document.createElement("option");
-    o.value = y; o.textContent = y;
-    ysel.append(o);
-  });
-  const dwImg = document.getElementById("dw-img");
-  const dwCap = document.getElementById("dw-cap");
-  let dwPct = "50";
-  const updateDW = () => {
-    dwImg.src = `../output/figures/daily_windows/daily_window_${dwPct}pct_${ysel.value}.png`;
-    dwCap.textContent = `Daily windows, ${ysel.value} — ≥ ${dwPct}% of corridor.`;
+  const inSector = d => (d >= 205 && d <= 235) || (d >= 305 && d <= 335);
+  const qualifies = (ms, d) => {
+    if (!Number.isFinite(ms) || !Number.isFinite(d)) return false;
+    const kt = msToKt(ms);
+    return kt >= 18 && kt <= 30 && inSector(d);
   };
-  ysel.addEventListener("change", updateDW);
-  document.querySelectorAll("#dw-seg button").forEach(b => {
-    b.addEventListener("click", () => {
-      document.querySelectorAll("#dw-seg button").forEach(o => o.setAttribute("aria-pressed", "false"));
-      b.setAttribute("aria-pressed", "true");
-      dwPct = b.dataset.pct;
-      updateDW();
+
+  async function load(point) {
+    content.classList.add("loading");
+    status.innerHTML = "";
+    try {
+      const d = await fetchWind(point, 7);
+      render(d);
+      content.classList.remove("loading");
+      document.getElementById("updated").textContent =
+        `updated ${fmtHour(new Date())} · ${point.lat.toFixed(1)}°N ${point.lon.toFixed(1)}°E`;
+    } catch (err) {
+      content.classList.remove("loading");
+      statusMsg(status, `Could not load live forecasts (${err.message}).`, () => load(currentPoint()));
+    }
+  }
+
+  function render(d) {
+    const nowI = nowIndexOf(d.times);
+    const spd = d.blendSpeed[nowI], dir = d.blendDir[nowI];
+
+    // right now
+    const met = qualifies(spd, dir);
+    const nowEl = document.getElementById("cond-now");
+    nowEl.className = `status-value ${met ? "met" : "not-met"}`;
+    nowEl.innerHTML = "";
+    const mark = document.createElement("span");
+    mark.className = "mark";
+    mark.textContent = met ? "✓" : "✗";
+    nowEl.append(mark, document.createTextNode(met ? "Conditions met right now" : "Not met right now"));
+    document.getElementById("cond-detail").textContent =
+      Number.isFinite(spd) && Number.isFinite(dir)
+        ? `blend now: ${msToKt(spd).toFixed(0)} kt (${spd.toFixed(1)} m/s) from ${compass16(dir)} ${Math.round(dir)}°`
+        : "no blend value for the current hour";
+
+    // day by day: longest consecutive qualifying run within each local day
+    const byDay = new Map();
+    for (let i = 0; i < d.times.length; i++) {
+      const key = d.times[i].toDateString();
+      if (!byDay.has(key)) byDay.set(key, { date: d.times[i], hours: [] });
+      byDay.get(key).hours.push(qualifies(d.blendSpeed[i], d.blendDir[i]));
+    }
+    const strip = document.getElementById("cond-days");
+    strip.innerHTML = "";
+    [...byDay.values()].slice(0, 7).forEach(day => {
+      let run = 0, best = 0;
+      for (const ok of day.hours) { run = ok ? run + 1 : 0; best = Math.max(best, run); }
+      const dayMet = best >= 6;
+      const cell = document.createElement("div");
+      cell.className = `day-cell ${dayMet ? "met" : "not-met"}`;
+      cell.title = `${fmtDay(day.date)}: longest qualifying stretch ${best} h (needs ≥ 6 h)`;
+      const dd = document.createElement("div");
+      dd.className = "d-day";
+      dd.textContent = fmtDay(day.date);
+      const dm = document.createElement("div");
+      dm.className = "d-mark";
+      dm.textContent = dayMet ? "✓" : "✗";
+      const dn = document.createElement("div");
+      dn.className = "d-note";
+      dn.textContent = best > 0 ? `${best} h` : "—";
+      cell.append(dd, dm, dn);
+      strip.append(cell);
     });
-  });
+
+    // ECMWF outlook
+    const ecmwf = d.perModel.ecmwf;
+    lineChart(document.getElementById("chart-ecmwf"), {
+      times: d.times,
+      series: [{ id: "ecmwf", name: "ECMWF IFS 0.25°", color: "--s2", values: ecmwf.speed, width: 2.5, endLabel: true }],
+      unit: "m/s", decimals: 1, yMin: 0, nowIndex: nowI,
+      ariaLabel: "ECMWF wind speed forecast for the next seven days",
+    });
+    directionStrip(document.getElementById("dir-ecmwf"), d.times, ecmwf.dir, { step: 6, label: "wind" });
+  }
+
+  initPointSelect(document.getElementById("pt"), load);
+  load(currentPoint());
 });
 </script>
 

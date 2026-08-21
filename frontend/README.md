@@ -2,18 +2,21 @@
 
 Static site — no build step, no dependencies.
 
-- **`index.html`** — overview: the generated figures (sailing-window climatology,
-  wind timeseries, forecast-blend evaluation) with light/dark variants that follow
-  the theme.
+- **`index.html`** — overview: live check whether the preferred sailing conditions
+  are met (18–30 kt from 205–235° or 305–335°, ≥ 6 consecutive hours, judged on the
+  blend) now and per day for the week ahead, plus the upcoming ECMWF wind forecast.
 - **`current.html`** — live current conditions: six Open-Meteo models fetched in one
   call and combined with the learned weights from
   `forecast_blend/results/weights.json` (speed weights for speed/gusts, direction
   weights on unit vectors for direction).
 - **`wind.html`** — detailed wind: 7-day hourly blend drawn over every individual
-  model, gusts, and model spread. Legend entries toggle models; every chart has a
-  crosshair tooltip and a table view.
+  model, gusts, and model spread, plus the generated climatology figures
+  (sailing-window heatmap/calendars, wind timeseries). Legend entries toggle models;
+  every chart has a crosshair tooltip and a table view.
 - **`tide.html`** — sea level with next high/low water, tidal stream, and wave
   height from the Open-Meteo Marine API.
+- **`forecast-blend.html`** — the blend itself: learned weights, held-out metrics
+  table, and the evaluation figure.
 
 ## Run
 
