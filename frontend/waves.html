@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DutchSail weather — waves</title>
+<script>(function(){var q=new URLSearchParams(location.search).get("theme");var t=q||localStorage.getItem("ds-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>
+<link rel="stylesheet" href="./assets/style.css">
+<script src="../output/scripts/api.js" defer></script>
+<script src="./assets/common.js" defer></script>
+</head>
+<body>
+
+<header class="site-header"><div class="bar">
+  <a class="brand" href="./index.html">Dutch<span>Sail</span> weather</a>
+  <nav class="site-nav">
+    <a href="./index.html">Overview</a>
+    <a href="./current.html">Current</a>
+    <a href="./wind.html">Detailed wind</a>
+    <a href="./tide.html">Tide</a>
+    <a href="./waves.html" aria-current="page">Waves</a>
+    <a href="./forecast-blend.html">Forecast blend</a>
+    <a href="./route.html">Route</a>
+  </nav>
+  <button class="theme-toggle" type="button">Theme: auto</button>
+</div></header>
+
+<main>
+  <h1 class="page-title">Waves</h1>
+  <p class="page-sub">
+    Wind-sea and swell conditions over the crossing area. Fetched and rendered by the Claude agent —
+    refresh it with <code>python agent/run_agent.py</code>.
+  </p>
+
+  <div class="filter-row">
+    <span class="filter-note" id="updated"></span>
+  </div>
+
+  <div id="content" class="loading">
+    <section style="margin-top:34px">
+      <h2>Corridor map — Copernicus Marine forecast</h2>
+      <p class="section-sub">
+        Wind-sea and swell over the crossing area from the Copernicus Marine forecast,
+        produced with the <code>get-forecast</code> skill. Hidden when the agent ran
+        without Copernicus credentials.
+      </p>
+      <div class="fig-grid wide">
+        <figure class="fig">
+          <img data-light="../output/figures/agent/waves_map_light.png"
+               data-dark="../output/figures/agent/waves_map_dark.png"
+               src="../output/figures/agent/waves_map_light.png"
+               alt="Multipanel map of wind-sea and swell over the crossing area"
+               loading="lazy" onerror="this.closest('figure').hidden=true">
+          <figcaption>Wind-sea and swell — height, period, direction.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section style="margin-top:34px">
+      <h2>Wave conditions — area of interest</h2>
+      <p class="section-sub">
+        Sample wave forecast data for the crossing area.
+      </p>
+      <div class="fig-grid wide">
+        <figure class="fig">
+          <img src="../sample_forecast_data/figures/wave_conditions_area_of_interest_2026-08-21T14_to_2026-08-27T23.png"
+               alt="Wave conditions over the crossing area"
+               loading="lazy">
+          <figcaption>Wave conditions forecast.</figcaption>
+        </figure>
+      </div>
+    </section>
+  </div>
+
+  <div id="status"></div>
+</main>
+
+<footer class="site-footer">Marine data fetched by the Claude agent (<code>agent/run_agent.py</code>).</footer>
+
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  const content = document.getElementById("content");
+  const status = document.getElementById("status");
+
+  try {
+    const s = await fetchAgentSummary();
+    document.getElementById("updated").textContent =
+      `agent run ${fmtFull(new Date(s.generated_at))} · ${s.point.name}`;
+  } catch (err) {
+    content.classList.remove("loading");
+    content.hidden = true;
+    statusMsg(status, `No agent data yet (${err.message}). ` +
+      `Run "python agent/run_agent.py" to fetch forecasts and build the graphs.`);
+  }
+});
+</script>
+
+</body>
+</html>
