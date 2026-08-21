@@ -2,19 +2,26 @@
 
 Static site — no build step, no dependencies.
 
-- **`index.html`** — overview: live check whether the preferred sailing conditions
-  are met (18–30 kt from 205–235° or 305–335°, ≥ 6 consecutive hours, judged on the
-  blend) now and per day for the week ahead, plus the upcoming ECMWF wind forecast.
-- **`current.html`** — live current conditions: six Open-Meteo models fetched in one
-  call and combined with the learned weights from
-  `forecast_blend/results/weights.json` (speed weights for speed/gusts, direction
-  weights on unit vectors for direction).
-- **`wind.html`** — detailed wind: 7-day hourly blend drawn over every individual
-  model, gusts, and model spread, plus the generated climatology figures
-  (sailing-window heatmap/calendars, wind timeseries). Legend entries toggle models;
-  every chart has a crosshair tooltip and a table view.
+**The browser makes no forecast API calls.** All forecast data is fetched — and
+every graph rendered — by the Claude agent: `python agent/run_agent.py` makes **one
+API call to Claude**, and the agent (following the skills in `.agents/skills/`)
+downloads the data, computes the blend and the sailing-window verdict, and writes
+`output/figures/agent/*_{light,dark}.png` plus `output/results/agent/summary.json`.
+The pages display those files. See [`agent/README.md`](../agent/README.md).
+
+- **`index.html`** — overview: whether the preferred sailing conditions are met
+  (18–30 kt from 205–235° or 305–335°, ≥ 6 consecutive hours, judged on the blend)
+  at the agent's run hour and per day for the week ahead, plus the agent's 7-day
+  wind figure.
+- **`current.html`** — conditions at the agent's run hour: six models combined with
+  the learned weights from `forecast_blend/results/weights.json`, the next-24-hours
+  figure, and the per-model table.
+- **`wind.html`** — detailed wind: the agent's 7-day figure (blend over every
+  individual model, gusts, model spread), plus the generated climatology figures
+  (sailing-window heatmap/calendars, wind timeseries).
 - **`tide.html`** — sea level with next high/low water, tidal stream, and wave
-  height from the Open-Meteo Marine API.
+  height, plus Copernicus Marine quick-look maps when the agent ran with
+  credentials.
 - **`forecast-blend.html`** — the blend itself: learned weights, held-out metrics
   table, and the evaluation figure.
 - **`route.html`** — the record route, Lowestoft → IJmuiden: the optimised track and
@@ -84,25 +91,39 @@ listed **before** the `**/*` static entry, plus a rewrite from `/api/route`. Che
 the rewrite destination — the legacy builder may want `/route/api/index` without
 the extension.
 
+## Agent pipeline (replaces the browser's forecast API calls)
+
+`python agent/run_agent.py` is the project's **single Claude API call**. It starts
+one agentic run (`claude-opus-5` with shell/read/write tools); the agent reads the
+skills in `.agents/skills/` (`get-forecast`, `weather-statistics`), fetches
+Open-Meteo wind + marine data and — with credentials — the Copernicus Marine
+forecasts, computes the blend and the window verdicts, and renders every graph in
+light and dark. Outputs (all committed, since the site is static):
+
+- `output/figures/agent/wind_forecast_{light,dark}.png` — index, wind
+- `output/figures/agent/wind_next24_{light,dark}.png` — current
+- `output/figures/agent/tide_{light,dark}.png` — tide
+- `output/figures/agent/{currents_map,waves_map}_{light,dark}.png` — tide (optional)
+- `output/results/agent/summary.json` — tiles, verdicts, and the model table
+
 ## API calls
 
-Every network call the site makes, verified live on 2026-08-21. All external
-calls are keyless except Mapbox.
+Every network call the site makes. The browser no longer contacts any forecast
+API — the former `fetchWind()`/`fetchMarine()` calls to Open-Meteo were replaced
+by the agent pipeline above.
 
 **All data fetching lives in `output/scripts/api.js`** — the single data-access layer.
-Pages and `assets/common.js` never call `fetch()` directly; they call the
-functions below (`fetchWind`, `fetchMarine`, `fetchLiveRoute`, `fetchStoredRoute`,
-`fetchRouteSummary`, `fetchRobustness`). To change an endpoint, a parameter, or a
-fallback order, change `output/scripts/api.js`. The only network activity outside it is
-the Mapbox GL library `<script>`/`<link>` in `route.html`'s head and the tiles
-that library loads itself.
+Pages and `assets/common.js` never call `fetch()` directly; they call the functions
+below (`fetchAgentSummary`, `fetchLiveRoute`, `fetchStoredRoute`, `fetchRouteSummary`,
+`fetchRobustness`). To change an endpoint, a parameter, or a fallback order, change
+`output/scripts/api.js`. The only network activity outside it is the Mapbox GL
+library `<script>`/`<link>` in `route.html`'s head and the tiles that library
+loads itself.
 
 ### External (browser → third-party)
 
 | Call | Made by | What / how |
 | --- | --- | --- |
-| `GET https://api.open-meteo.com/v1/forecast` | `index.html` (7 d), `wind.html` (7 d), `current.html` (3 d) via `fetchWind()` in `output/scripts/api.js` | Hourly `wind_speed_10m`, `wind_direction_10m`, `wind_gusts_10m` for **all six models in one request** (`models=ecmwf_ifs025,gfs_global,icon_eu,meteofrance_arpege_europe,knmi_harmonie_arome_netherlands,ukmo_global_deterministic_10km`); `wind_speed_unit=ms`, `timeformat=unixtime`. Response keys come back suffixed per model (18 hourly arrays). One call per page load and per location change. No key. |
-| `GET https://marine-api.open-meteo.com/v1/marine` | `tide.html` (5 d) via `fetchMarine()` in `output/scripts/api.js` | Hourly `sea_level_height_msl`, `wave_height`, `ocean_current_velocity`, `ocean_current_direction`; `timeformat=unixtime`. The API returns current velocity in **km/h**; the page converts to knots. No key. |
 | `GET https://api.mapbox.com/mapbox-gl-js/v3.26.0/mapbox-gl.{js,css}` | `route.html` `<head>` | Mapbox GL library from the CDN — the site's only external script. If blocked, the map degrades to a message; the rest of the page still works. |
 | Mapbox style + tile requests (`api.mapbox.com`, `events.mapbox.com`) | Mapbox GL at runtime on `route.html` | Loads `mapbox://styles/mapbox/outdoors-v12` plus its vector tiles, sprites, and glyphs, authenticated with the `pk.` token from `assets/mapbox-token.js`. Skipped entirely when no token is configured. |
 
@@ -110,6 +131,7 @@ that library loads itself.
 
 | Call | Made by | What / how |
 | --- | --- | --- |
+| `GET output/results/agent/summary.json` | `index.html`, `current.html`, `wind.html`, `tide.html` via `fetchAgentSummary()` in `output/scripts/api.js` | The agent's machine-readable summary (blend now, day verdicts, model table, tide numbers). Cache-busted with a timestamp query because the file is rewritten in place. |
 | `POST /api/route` (JSON `{current}`, 45 s timeout) | `route.html` **Update route** button via `fetchLiveRoute()` in `output/scripts/api.js` | The live optimiser. **Not deployed** (see above) — the request fails and the page falls back to the stored route, with a banner. |
 | `GET frontend/data/route-today.json` | `route.html` on load via `fetchStoredRoute()` in `output/scripts/api.js` | Today's optimised route, rewritten daily by CI. |
 | `GET frontend/data/route-sample.json` | `route.html` fallback via `fetchStoredRoute()` in `output/scripts/api.js` | Synthetic sample route, used only when `route-today.json` is missing and the API errors. |
@@ -156,9 +178,10 @@ client-side from `route-today.json` instead.
 
 ## Notes
 
-- Blend weights are embedded in `output/scripts/api.js`; re-copy them from
-  `forecast_blend/results/weights.json` after retraining.
-- Locations are the four ERA5 grid points the blend was trained on.
+- The agent reads the blend weights from `forecast_blend/results/weights.json` on
+  every run — nothing to re-copy after retraining; just rerun the agent.
+- The agent works at the mid-corridor ERA5 grid point (52.5°N 3.0°E); the point is
+  recorded in `summary.json` and shown on each page.
 - Theme toggle cycles auto → light → dark (persisted in `localStorage`).
 - `route.html` posts to `/api/route` first and falls back to the stored
   `data/route-sample.json` whenever that endpoint is missing or errors — which is

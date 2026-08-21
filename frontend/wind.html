@@ -28,13 +28,11 @@
   <h1 class="page-title">Detailed wind — 7-day outlook</h1>
   <p class="page-sub">
     Hourly 10&nbsp;m wind for the week ahead: the learned blend drawn over each of the six
-    models it combines. Click a legend entry to hide or show a model; hover for every
-    model&rsquo;s value at any hour.
+    models it combines, plus gusts and model spread. Fetched and rendered by the Claude
+    agent — refresh it with <code>python agent/run_agent.py</code>.
   </p>
 
   <div class="filter-row">
-    <label for="pt">Location</label>
-    <select id="pt"></select>
     <span class="filter-note" id="updated"></span>
   </div>
 
@@ -42,32 +40,16 @@
     <section class="card chart-card">
       <div class="chart-head">
         <div>
-          <h3>Wind speed — blend vs individual models</h3>
-          <p class="card-sub">The blend (blue, bold) is the weighted combination scored on the overview page.</p>
+          <h3>Wind speed, gusts, and model spread</h3>
+          <p class="card-sub">Top: the blend (bold) over every individual model. Middle: blended gusts. Bottom: max&nbsp;−&nbsp;min across the six models — small spread, trustworthy forecast.</p>
         </div>
       </div>
-      <div id="chart-speed"></div>
-      <div id="dir-strip"></div>
-    </section>
-
-    <section class="card chart-card" style="margin-top:14px">
-      <div class="chart-head">
-        <div>
-          <h3>Gusts</h3>
-          <p class="card-sub">Blended 10&nbsp;m gusts (speed weights, renormalized over models that report gusts).</p>
-        </div>
-      </div>
-      <div id="chart-gust"></div>
-    </section>
-
-    <section class="card chart-card" style="margin-top:14px">
-      <div class="chart-head">
-        <div>
-          <h3>Model spread</h3>
-          <p class="card-sub">Max&nbsp;−&nbsp;min wind speed across the six models — a quick confidence read: small spread, trustworthy forecast.</p>
-        </div>
-      </div>
-      <div id="chart-spread"></div>
+      <figure class="fig">
+        <img data-light="../output/figures/agent/wind_forecast_light.png"
+             data-dark="../output/figures/agent/wind_forecast_dark.png"
+             src="../output/figures/agent/wind_forecast_light.png"
+             alt="Seven-day wind forecast: blend over six models, gusts, and model spread">
+      </figure>
     </section>
   </div>
 
@@ -173,59 +155,24 @@
   </section>
 </main>
 
-<footer class="site-footer">Forecast data: Open-Meteo (live) · blend weights: <code>forecast_blend/results/weights.json</code>.</footer>
+<footer class="site-footer">Forecast data fetched by the Claude agent (<code>agent/run_agent.py</code>) · blend weights: <code>forecast_blend/results/weights.json</code>.</footer>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   const content = document.getElementById("content");
   const status = document.getElementById("status");
 
-  async function load(point) {
-    content.classList.add("loading");
-    status.innerHTML = "";
-    try {
-      const d = await fetchWind(point, 7);
-      render(d);
-      content.classList.remove("loading");
-      document.getElementById("updated").textContent =
-        `updated ${fmtHour(new Date())} · ${point.lat.toFixed(1)}°N ${point.lon.toFixed(1)}°E`;
-    } catch (err) {
-      content.classList.remove("loading");
-      statusMsg(status, `Could not load live forecasts (${err.message}).`, () => load(currentPoint()));
-    }
+  try {
+    const s = await fetchAgentSummary();
+    content.classList.remove("loading");
+    document.getElementById("updated").textContent =
+      `agent run ${fmtFull(new Date(s.generated_at))} · ${s.point.name}`;
+  } catch (err) {
+    content.classList.remove("loading");
+    content.hidden = true;
+    statusMsg(status, `No agent data yet (${err.message}). ` +
+      `Run "python agent/run_agent.py" to fetch forecasts and build the graphs.`);
   }
-
-  function render(d) {
-    const nowI = nowIndexOf(d.times);
-
-    lineChart(document.getElementById("chart-speed"), {
-      times: d.times,
-      series: [
-        { id: "blend", name: "Blend", color: BLEND_COLOR, values: d.blendSpeed, width: 3, endLabel: true },
-        ...MODELS.map(m => ({ id: m.key, name: m.name, color: m.color, values: d.perModel[m.key].speed, width: 1.6 })),
-      ],
-      unit: "m/s", decimals: 1, yMin: 0, nowIndex: nowI,
-      ariaLabel: "Wind speed for the next seven days, blend and six models",
-    });
-    directionStrip(document.getElementById("dir-strip"), d.times, d.blendDir, { step: 6, label: "wind" });
-
-    lineChart(document.getElementById("chart-gust"), {
-      times: d.times,
-      series: [{ id: "gust", name: "Blended gusts", color: BLEND_COLOR, values: d.blendGust, width: 2.5, endLabel: true }],
-      unit: "m/s", decimals: 1, yMin: 0, nowIndex: nowI,
-      ariaLabel: "Blended wind gusts for the next seven days",
-    });
-
-    lineChart(document.getElementById("chart-spread"), {
-      times: d.times,
-      series: [{ id: "spread", name: "Model spread", color: "--s2", values: d.spread, width: 2.5 }],
-      unit: "m/s", decimals: 1, yMin: 0, nowIndex: nowI,
-      ariaLabel: "Spread between the six models' wind speed for the next seven days",
-    });
-  }
-
-  initPointSelect(document.getElementById("pt"), load);
-  load(currentPoint());
 
   // calendar coverage switcher
   const calImg = document.getElementById("cal-img");
