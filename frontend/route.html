@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DutchSail weather — record route</title>
+<script>(function(){var q=new URLSearchParams(location.search).get("theme");var t=q||localStorage.getItem("ds-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>
+<link rel="stylesheet" href="./assets/style.css">
+<script src="./assets/common.js" defer></script>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.26.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.26.0/mapbox-gl.js"></script>
+<script src="./assets/mapbox-token.js" onerror="void 0"></script>
+<style>
+  /* page-local: the map is the only thing on the site that needs a fixed box */
+  .map-card { padding: 0; overflow: hidden; position: relative; }
+  #map { height: min(62vh, 520px); min-height: 340px; }
+  #map:focus-visible { outline: 2px solid var(--s1); outline-offset: -2px; }
+  .map-legend {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    padding: 10px 16px; border-top: 1px solid var(--border);
+    color: var(--ink-2); font-size: 12.5px;
+  }
+  .map-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .map-legend .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .map-legend .line { width: 16px; height: 0; border-top: 3px solid #ef5b25; border-radius: 2px; flex: none; }
+  .map-fallback { padding: 26px 16px; color: var(--ink-2); font-size: 14px; }
+  .sample-banner {
+    margin: 0 0 14px; padding: 9px 12px;
+    border: 1px solid var(--border); border-left: 3px solid var(--s4);
+    border-radius: 8px; background: var(--surface);
+    color: var(--ink-2); font-size: 13px;
+  }
+  .sample-banner[hidden] { display: none; }
+  .filter-row input[type="number"] {
+    font: inherit; font-size: 14px; width: 84px;
+    color: var(--ink); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px;
+  }
+  .filter-row button.go {
+    font: inherit; font-size: 13px; cursor: pointer;
+    color: var(--ink); background: transparent;
+    border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px;
+  }
+  .filter-row button.go:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+  .filter-row button.go:disabled { opacity: .5; cursor: default; }
+</style>
+</head>
+<body>
+
+<header class="site-header"><div class="bar">
+  <a class="brand" href="./index.html">Dutch<span>Sail</span> weather</a>
+  <nav class="site-nav">
+    <a href="./index.html">Overview</a>
+    <a href="./current.html">Current</a>
+    <a href="./wind.html">Detailed wind</a>
+    <a href="./tide.html">Tide</a>
+    <a href="./forecast-blend.html">Forecast blend</a>
+    <a href="./route.html" aria-current="page">Route</a>
+  </nav>
+  <button class="theme-toggle" type="button">Theme: auto</button>
+</div></header>
+
+<main>
+  <h1 class="page-title">Record route — Lowestoft → IJmuiden</h1>
+  <p class="page-sub">
+    101.7&nbsp;nm on 090&nbsp;T, almost exactly due east: a single gybe-free reach with
+    no tacks and no meaningful detours. The optimiser searches headings against the
+    forecast wind and the tidal stream; the whole route family collapses to one real
+    decision — how far north of the rhumb line to bulge, which costs distance but
+    protects true wind angle if the wind backs.
+  </p>
+
+  <div class="sample-banner" id="sample-banner" hidden></div>
+
+  <div class="tiles">
+    <div class="tile">
+      <div class="label">Elapsed on this route</div>
+      <div class="value" id="t-duration">—</div>
+      <div class="delta" id="t-duration-note">optimising…</div>
+    </div>
+    <div class="tile">
+      <div class="label">Record to beat</div>
+      <div class="value" id="t-record">—</div>
+      <div class="delta" id="t-record-note">18 kt average over the course</div>
+    </div>
+    <div class="tile">
+      <div class="label">Margin vs record</div>
+      <div class="value" id="t-margin">—</div>
+      <div class="delta" id="t-margin-note">&nbsp;</div>
+    </div>
+    <div class="tile">
+      <div class="label">Finish reached</div>
+      <div class="value" id="t-reached">—</div>
+      <div class="delta" id="t-reached-note">&nbsp;</div>
+    </div>
+  </div>
+
+  <section>
+    <h2>Optimised track</h2>
+    <p class="section-sub">
+      Wind is sampled from the forecast GRIB at each position and time; boat speed comes
+      from the polar table. The tidal stream is entered as a single vector — its direction
+      is where the water flows <em>toward</em>. Arrows on the map point downwind, sized by
+      wind speed.
+    </p>
+
+    <div class="filter-row">
+      <label for="cur-speed">Current kt</label>
+      <input type="number" id="cur-speed" value="1" min="0" max="10" step="0.1">
+      <label for="cur-toward">Toward °</label>
+      <input type="number" id="cur-toward" value="45" min="0" max="359" step="1">
+      <button type="button" class="go" id="recompute">Update route</button>
+      <span class="filter-note" id="route-note"></span>
+    </div>
+
+    <div class="card map-card">
+      <div id="map"></div>
+      <div class="map-legend">
+        <span><i class="dot" style="background:#16803c"></i>Start — Lowestoft</span>
+        <span><i class="dot" style="background:#c81e1e"></i>Finish — IJmuiden</span>
+        <span><i class="line"></i>Optimised track</span>
+        <span>↑ wind, pointing downwind</span>
+      </div>
+    </div>
+    <div id="route-status"></div>
+  </section>
+
+  <section>
+    <h2>Today's forecast run</h2>
+    <p class="section-sub">
+      Redrawn every morning by <code>route/daily_forecast.py</code> from the newest NOAA
+      GFS cycle: the optimised track over the forecast wind field, and the wind and boat
+      speed the optimiser expects along it. Yesterday's figure is replaced, not archived.
+    </p>
+    <div class="fig-grid wide">
+      <figure class="fig">
+        <img data-light="../output/figures/daily/forecast_route_light.png"
+             data-dark="../output/figures/daily/forecast_route_dark.png"
+             src="../output/figures/daily/forecast_route_light.png"
+             alt="Optimised Lowestoft to IJmuiden track over the GFS forecast wind field, with wind and boat speed along the track"
+             loading="lazy">
+        <figcaption id="daily-fig-caption">
+          Optimised track and the wind it was optimised against.
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Brief</h2>
+    <p class="section-sub">
+      Written by the LLM layer from the scenario KPIs. It narrates the distribution — it
+      does not choose the route and does not give go/no-go.
+    </p>
+    <div class="card">
+      <p id="insight" style="margin:0; color:var(--ink-2)">Loading brief…</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Robustness — which route survives being wrong</h2>
+    <p class="section-sub">
+      Every scenario is optimised into its own route, then each route is re-sailed through
+      every <em>other</em> scenario, holding the geographic track fixed and re-integrating
+      the timing. <code>P(record)</code> is the weight-summed share of scenarios in which
+      that track still beats the record; the diagonal is excluded, so these are
+      out-of-sample numbers. Axes: wind pattern × forecast phase error (±1 h) × uniform
+      polar scale (±5%).
+    </p>
+    <div class="card">
+      <div class="chart-head">
+        <div class="spacer"></div>
+        <button type="button" class="table-toggle" id="kpi-toggle" aria-pressed="false">Show all</button>
+      </div>
+      <div class="data-table-wrap">
+        <table class="data-table model-table" id="kpi-table">
+          <thead><tr>
+            <th>Track optimised for</th>
+            <th>P(record)</th>
+            <th>Mean elapsed (h:mm)</th>
+            <th>Spread</th>
+            <th>Worst margin</th>
+          </tr></thead>
+          <tbody id="kpi-body"><tr><td colspan="5">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <p class="card-sub" id="kpi-note" style="margin-top:10px">&nbsp;</p>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  Optimiser: <code>route/route.py</code> (beam search over headings) · robustness:
+  <code>route/robustness.py</code> → <code>route/app/gribs/robustness.json</code> ·
+  live endpoint <code>route/api/index.py</code>. Basemap © Mapbox © OpenStreetMap.
+</footer>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  "use strict";
+
+  // Set in assets/mapbox-token.js — gitignored, generated from MAPBOX_TOKEN in
+  // .env by scripts/write_mapbox_token.py (locally) or by the Vercel build command.
+  const MAPBOX_TOKEN = window.MAPBOX_TOKEN || "";
+  const MAP_STYLE = "mapbox://styles/mapbox/outdoors-v12";
+  const TODAY_URL = "./data/route-today.json";     // rewritten daily by CI
+  const SAMPLE_URL = "./data/route-sample.json";   // last-resort synthetic fallback
+  const ROBUSTNESS_URL = "../route/app/gribs/robustness.json";
+  const SUMMARY_URL = "../route/app/gribs/summary.json";
+  const API_URL = "/api/route";
+  const API_TIMEOUT_MS = 45000;
+
+  const statusEl = document.getElementById("route-status");
+  const noteEl = document.getElementById("route-note");
+  const bannerEl = document.getElementById("sample-banner");
+  const buttonEl = document.getElementById("recompute");
+
+  let recordHours = null;   // from robustness.json
+  let lastRoute = null;
+  let map = null, mapReady = null;
+
+  /* ---------------- formatting ---------------- */
+
+  const hoursToHM = h => {
+    if (!Number.isFinite(h)) return "—";
+    const total = Math.round(h * 60);
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+  };
+  // margin convention across this page: positive = time to spare against the record
+  const minutesToSpare = m => `${m >= 0 ? "+" : "−"}${Math.abs(m).toFixed(m >= 10 ? 0 : 1)} min`;
+
+  /* ---------------- tiles ---------------- */
+
+  function renderTiles(d) {
+    const dur = d.duration_hours;
+    document.getElementById("t-duration").innerHTML = `${hoursToHM(dur)}<small>h:mm</small>`;
+    document.getElementById("t-duration-note").textContent = `${d.route.length} legs · 20-minute steps`;
+
+    document.getElementById("t-record").innerHTML =
+      recordHours === null ? "—" : `${hoursToHM(recordHours)}<small>h:mm</small>`;
+
+    const marginEl = document.getElementById("t-margin");
+    const marginNote = document.getElementById("t-margin-note");
+    marginNote.className = "delta";
+    if (recordHours === null || !Number.isFinite(dur)) {
+      marginEl.textContent = "—";
+      marginNote.textContent = " ";
+    } else if (!d.reached_destination) {
+      marginEl.textContent = "n/a";
+      marginNote.textContent = "track stops short of the finish — not comparable";
+    } else {
+      const minutes = (recordHours - dur) * 60;
+      marginEl.textContent = minutesToSpare(minutes);
+      marginNote.textContent = minutes >= 0 ? "inside the record" : "over the record";
+      if (minutes >= 0) marginNote.className = "delta good";
+    }
+
+    const reachedEl = document.getElementById("t-reached");
+    reachedEl.textContent = d.reached_destination ? "Yes" : "No";
+    document.getElementById("t-reached-note").textContent =
+      d.reached_destination
+        ? `within ${d.remaining_nm.toFixed(2)} nm of IJmuiden`
+        : `${d.remaining_nm.toFixed(1)} nm short at the ${hoursToHM(dur)} cut-off`;
+  }
+
+  /* ---------------- map ---------------- */
+
+  function windArrowImage() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 48;
+    canvas.height = 80;
+    const ctx = canvas.getContext("2d");
+    ctx.strokeStyle = ctx.fillStyle = "#ffffff";
+    ctx.globalAlpha = 0.85;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(24, 74);
+    ctx.lineTo(24, 8);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(24, 4);
+    ctx.lineTo(14, 17);
+    ctx.lineTo(34, 17);
+    ctx.closePath();
+    ctx.fill();
+    return ctx.getImageData(0, 0, 48, 80);
+  }
+
+  const lineFeature = coords => ({
+    type: "Feature", properties: {},
+    geometry: { type: "LineString", coordinates: coords },
+  });
+
+  const windFeatures = vectors => ({
+    type: "FeatureCollection",
+    features: vectors.map(v => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [v.lon, v.lat] },
+      properties: { ...v, toward_degrees: (v.from_degrees + 180) % 360 },
+    })),
+  });
+
+  function initMap() {
+    if (!MAPBOX_TOKEN) return Promise.reject(new Error("no Mapbox token configured — see frontend/README.md"));
+    if (typeof mapboxgl === "undefined") return Promise.reject(new Error("Mapbox GL did not load"));
+    mapboxgl.accessToken = MAPBOX_TOKEN;
+    map = new mapboxgl.Map({ container: "map", style: MAP_STYLE });
+    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
+    map.getCanvas().setAttribute("aria-label", "Map of the optimised route from Lowestoft to IJmuiden");
+    return new Promise((resolve, reject) => {
+      map.on("load", () => {
+        map.addImage("wind-arrow", windArrowImage());
+        map.addSource("route", { type: "geojson", data: lineFeature([]) });
+        map.addLayer({
+          id: "route", type: "line", source: "route",
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: { "line-color": "#ef5b25", "line-width": 5 },
+        });
+        map.addSource("wind", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+        map.addLayer({
+          id: "wind", type: "symbol", source: "wind",
+          layout: {
+            "icon-image": "wind-arrow",
+            "icon-allow-overlap": true,
+            "icon-rotate": ["get", "toward_degrees"],
+            "icon-rotation-alignment": "map",
+            "icon-size": ["interpolate", ["linear"], ["get", "speed_knots"], 0, 0.3, 20, 0.8],
+          },
+        });
+        resolve();
+      });
+      map.on("error", e => reject(new Error(e.error?.message || "Map failed to load")));
+    });
+  }
+
+  let startMarker = null, finishMarker = null;
+
+  async function drawRoute(d) {
+    if (!mapReady) mapReady = initMap();
+    await mapReady;
+    const coords = d.route.map(([lat, lon]) => [lon, lat]);
+    map.getSource("route").setData(lineFeature(coords));
+    map.getSource("wind").setData(windFeatures(d.wind_vectors));
+
+    startMarker?.remove();
+    finishMarker?.remove();
+    startMarker = new mapboxgl.Marker({ color: "#16803c" }).setLngLat(coords[0]).addTo(map);
+    finishMarker = new mapboxgl.Marker({ color: "#c81e1e" }).setLngLat(coords.at(-1)).addTo(map);
+
+    const bounds = coords.reduce((box, p) => box.extend(p), new mapboxgl.LngLatBounds(coords[0], coords[0]));
+    map.fitBounds(bounds, { padding: 60, duration: 0 });
+  }
+
+  /* ---------------- data ---------------- */
+
+  async function fetchLiveRoute(current) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), API_TIMEOUT_MS);
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ current }),
+        signal: ctrl.signal,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `optimiser returned ${res.status}`);
+      return data;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  const fmtCycle = iso => {
+    const d = new Date(iso);
+    return Number.isNaN(+d) ? iso
+      : `${d.toUTCString().slice(5, 16)} ${String(d.getUTCHours()).padStart(2, "0")}:00 UTC`;
+  };
+
+  // stored → today's CI-generated route first, synthetic sample only if that is missing
+  async function fetchStoredRoute() {
+    for (const url of [TODAY_URL, SAMPLE_URL]) {
+      try {
+        const res = await fetch(url);
+        if (res.ok) return await res.json();
+      } catch { /* try the next one */ }
+    }
+    return null;
+  }
+
+  async function load(current, { live = false } = {}) {
+    buttonEl.disabled = true;
+    statusEl.innerHTML = "";
+    noteEl.textContent = live ? "optimising…" : "loading…";
+    bannerEl.hidden = true;
+
+    let data = null, wasLive = false;
+    if (live) {
+      try {
+        data = await fetchLiveRoute(current);
+        wasLive = true;
+      } catch { /* fall through to the stored route */ }
+    }
+    if (!data) data = await fetchStoredRoute();
+    if (!data) {
+      noteEl.textContent = "";
+      buttonEl.disabled = false;
+      statusMsg(statusEl, "No route available — neither the live optimiser nor a stored route could be loaded.",
+        () => load(readCurrent(), { live }));
+      return;
+    }
+
+    lastRoute = data;
+    renderTiles(data);
+
+    if (wasLive) {
+      noteEl.textContent = `computed for ${current.speed} kt toward ${current.toward}°`;
+    } else if (data.source === "gfs") {
+      noteEl.textContent = `GFS ${fmtCycle(data.cycle)}`;
+      const cap = document.getElementById("daily-fig-caption");
+      if (cap) cap.textContent =
+        `GFS ${fmtCycle(data.cycle)} — ${data.reached_destination
+          ? `${hoursToHM(data.duration_hours)} to IJmuiden`
+          : `stopped ${data.remaining_nm.toFixed(1)} nm short`}.`;
+      bannerEl.hidden = false;
+      bannerEl.innerHTML =
+        `<strong>Today's route.</strong> Optimised against NOAA GFS ` +
+        `${fmtCycle(data.cycle)} and regenerated every day. The current vector below only ` +
+        `takes effect with a live optimiser, which is not deployed.`;
+    } else {
+      noteEl.textContent = "stored sample";
+      bannerEl.hidden = false;
+      bannerEl.innerHTML =
+        "<strong>Showing a stored sample route.</strong> Today's forecast route could not be " +
+        "loaded, so this is the synthetic fallback. " + (data.note || "");
+    }
+
+    try {
+      await drawRoute(data);
+    } catch (err) {
+      document.getElementById("map").innerHTML =
+        `<div class="map-fallback">Map unavailable (${err.message}). The route figures above are still valid.</div>`;
+    }
+    buttonEl.disabled = false;
+  }
+
+  const readCurrent = () => ({
+    speed: Number(document.getElementById("cur-speed").value),
+    toward: Number(document.getElementById("cur-toward").value),
+  });
+
+  buttonEl.addEventListener("click", () => load(readCurrent(), { live: true }));
+
+  /* ---------------- brief ---------------- */
+
+  fetch(SUMMARY_URL)
+    .then(r => r.ok ? r.json() : null)
+    .then(d => { document.getElementById("insight").textContent = d?.summary || "No brief available."; })
+    .catch(() => { document.getElementById("insight").textContent = "No brief available."; });
+
+  /* ---------------- robustness KPIs ---------------- */
+
+  const COLLAPSED = 8;
+
+  function renderKpis(kpis) {
+    const body = document.getElementById("kpi-body");
+    const toggle = document.getElementById("kpi-toggle");
+    const ranked = [...kpis].sort((a, b) => b.p_win - a.p_win || b.margin_min - a.margin_min);
+    let expanded = false;
+
+    const paint = () => {
+      const rows = expanded ? ranked : ranked.slice(0, COLLAPSED);
+      body.innerHTML = "";
+      rows.forEach((k, i) => {
+        const tr = document.createElement("tr");
+        if (i === 0 && !expanded) tr.style.fontWeight = "650";
+        const cells = [
+          k.label,
+          `${(k.p_win * 100).toFixed(1)}%`,
+          hoursToHM(k.mean_h),
+          `±${(k.spread_h * 60).toFixed(0)} min`,
+          minutesToSpare(k.margin_min),
+        ];
+        cells.forEach(text => {
+          const td = document.createElement("td");
+          td.textContent = text;
+          tr.append(td);
+        });
+        body.append(tr);
+      });
+      toggle.textContent = expanded ? "Show top 8" : `Show all ${ranked.length}`;
+      toggle.setAttribute("aria-pressed", String(expanded));
+    };
+
+    toggle.addEventListener("click", () => { expanded = !expanded; paint(); });
+    paint();
+  }
+
+  fetch(ROBUSTNESS_URL)
+    .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+    .then(d => {
+      recordHours = d.record_hours;
+      document.getElementById("t-record-note").textContent =
+        `${d.target_avg_knots} kt average over the course`;
+      if (lastRoute) renderTiles(lastRoute);
+      renderKpis(d.kpis);
+      document.getElementById("kpi-note").innerHTML =
+        `${d.scenarios.length} scenarios · ${d.scenarios.length}×${d.scenarios.length} ` +
+        `cross-evaluation, diagonal excluded · source <code>route/app/gribs/robustness.json</code>.`;
+    })
+    .catch(err => {
+      document.getElementById("kpi-body").innerHTML =
+        `<tr><td colspan="5">Robustness results unavailable (${err.message}). ` +
+        `Run <code>python route/robustness.py --synthetic</code> to regenerate them.</td></tr>`;
+      document.getElementById("kpi-note").textContent = " ";
+    });
+
+  load(readCurrent());
+});
+</script>
+
+</body>
+</html>

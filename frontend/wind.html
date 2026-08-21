@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DutchSail weather — detailed wind</title>
+<script>(function(){var q=new URLSearchParams(location.search).get("theme");var t=q||localStorage.getItem("ds-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>
+<link rel="stylesheet" href="./assets/style.css">
+<script src="./assets/common.js" defer></script>
+</head>
+<body>
+
+<header class="site-header"><div class="bar">
+  <a class="brand" href="./index.html">Dutch<span>Sail</span> weather</a>
+  <nav class="site-nav">
+    <a href="./index.html">Overview</a>
+    <a href="./current.html">Current</a>
+    <a href="./wind.html" aria-current="page">Detailed wind</a>
+    <a href="./tide.html">Tide</a>
+    <a href="./forecast-blend.html">Forecast blend</a>
+    <a href="./route.html">Route</a>
+  </nav>
+  <button class="theme-toggle" type="button">Theme: auto</button>
+</div></header>
+
+<main>
+  <h1 class="page-title">Detailed wind — 7-day outlook</h1>
+  <p class="page-sub">
+    Hourly 10&nbsp;m wind for the week ahead: the learned blend drawn over each of the six
+    models it combines. Click a legend entry to hide or show a model; hover for every
+    model&rsquo;s value at any hour.
+  </p>
+
+  <div class="filter-row">
+    <label for="pt">Location</label>
+    <select id="pt"></select>
+    <span class="filter-note" id="updated"></span>
+  </div>
+
+  <div id="content" class="loading">
+    <section class="card chart-card">
+      <div class="chart-head">
+        <div>
+          <h3>Wind speed — blend vs individual models</h3>
+          <p class="card-sub">The blend (blue, bold) is the weighted combination scored on the overview page.</p>
+        </div>
+      </div>
+      <div id="chart-speed"></div>
+      <div id="dir-strip"></div>
+    </section>
+
+    <section class="card chart-card" style="margin-top:14px">
+      <div class="chart-head">
+        <div>
+          <h3>Gusts</h3>
+          <p class="card-sub">Blended 10&nbsp;m gusts (speed weights, renormalized over models that report gusts).</p>
+        </div>
+      </div>
+      <div id="chart-gust"></div>
+    </section>
+
+    <section class="card chart-card" style="margin-top:14px">
+      <div class="chart-head">
+        <div>
+          <h3>Model spread</h3>
+          <p class="card-sub">Max&nbsp;−&nbsp;min wind speed across the six models — a quick confidence read: small spread, trustworthy forecast.</p>
+        </div>
+      </div>
+      <div id="chart-spread"></div>
+    </section>
+  </div>
+
+  <div id="status"></div>
+
+  <section style="margin-top:34px">
+    <h2>Sailing-window climatology</h2>
+    <p class="section-sub">
+      How often the corridor offers a sailable window, from six years of ERA5 wind.
+    </p>
+    <div class="fig-grid">
+      <figure class="fig">
+        <img data-light="../output/figures/wind_window_heatmap_light.png"
+             data-dark="../output/figures/wind_window_heatmap_dark.png"
+             src="../output/figures/wind_window_heatmap_light.png"
+             alt="Heatmap of sailing-window days" loading="lazy">
+        <figcaption>Window days, month × year.</figcaption>
+      </figure>
+      <figure class="fig">
+        <img data-light="../output/figures/wind_window_seasonality_light.png"
+             data-dark="../output/figures/wind_window_seasonality_dark.png"
+             src="../output/figures/wind_window_seasonality_light.png"
+             alt="Seasonality of sailing windows" loading="lazy">
+        <figcaption>Seasonality: mean window days per month.</figcaption>
+      </figure>
+      <figure class="fig">
+        <img data-light="../output/figures/wind_window_annual_light.png"
+             data-dark="../output/figures/wind_window_annual_dark.png"
+             src="../output/figures/wind_window_annual_light.png"
+             alt="Annual sailing-window totals" loading="lazy">
+        <figcaption>Annual totals per region coverage.</figcaption>
+      </figure>
+      <figure class="fig">
+        <img data-light="../output/figures/wind_condition_share_light.png"
+             data-dark="../output/figures/wind_condition_share_dark.png"
+             src="../output/figures/wind_condition_share_light.png"
+             alt="Share of wind conditions" loading="lazy">
+        <figcaption>Share of hours by wind condition class.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Window calendars</h2>
+    <p class="section-sub">Day-by-day window flags; pick how much of the corridor must qualify.</p>
+    <div class="filter-row">
+      <div class="seg" id="cal-seg" role="group" aria-label="corridor coverage">
+        <button type="button" data-pct="50" aria-pressed="true">50% of area</button>
+        <button type="button" data-pct="75" aria-pressed="false">75%</button>
+        <button type="button" data-pct="100" aria-pressed="false">100%</button>
+      </div>
+    </div>
+    <div class="fig-grid wide">
+      <figure class="fig">
+        <img id="cal-img"
+             data-light="../output/figures/wind_window_calendar_50_light.png"
+             data-dark="../output/figures/wind_window_calendar_50_dark.png"
+             src="../output/figures/wind_window_calendar_50_light.png"
+             alt="Calendar of sailing-window days" loading="lazy">
+        <figcaption id="cal-cap">Sailing-window calendar — window when ≥ 50% of the corridor qualifies.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Wind climate</h2>
+    <div class="fig-grid wide">
+      <figure class="fig">
+        <img data-light="../output/figures/wind_speed_timeseries_light.png"
+             data-dark="../output/figures/wind_speed_timeseries_dark.png"
+             src="../output/figures/wind_speed_timeseries_light.png"
+             alt="Wind speed time series" loading="lazy">
+        <figcaption>10&nbsp;m wind speed over the record.</figcaption>
+      </figure>
+      <figure class="fig">
+        <img data-light="../output/figures/wind_direction_timeseries_light.png"
+             data-dark="../output/figures/wind_direction_timeseries_dark.png"
+             src="../output/figures/wind_direction_timeseries_light.png"
+             alt="Wind direction time series" loading="lazy">
+        <figcaption>Wind direction over the record.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Daily windows by year</h2>
+    <div class="filter-row">
+      <label for="dw-year">Year</label>
+      <select id="dw-year"></select>
+      <div class="seg" id="dw-seg" role="group" aria-label="corridor coverage">
+        <button type="button" data-pct="50" aria-pressed="true">50%</button>
+        <button type="button" data-pct="75" aria-pressed="false">75%</button>
+        <button type="button" data-pct="100" aria-pressed="false">100%</button>
+      </div>
+    </div>
+    <div class="fig-grid wide">
+      <figure class="fig">
+        <img id="dw-img" src="../output/figures/daily_windows/daily_window_50pct_2026.png"
+             alt="Daily sailing windows for the selected year" loading="lazy">
+        <figcaption id="dw-cap">Daily windows, 2026 — ≥ 50% of corridor.</figcaption>
+      </figure>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">Forecast data: Open-Meteo (live) · blend weights: <code>forecast_blend/results/weights.json</code>.</footer>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const content = document.getElementById("content");
+  const status = document.getElementById("status");
+
+  async function load(point) {
+    content.classList.add("loading");
+    status.innerHTML = "";
+    try {
+      const d = await fetchWind(point, 7);
+      render(d);
+      content.classList.remove("loading");
+      document.getElementById("updated").textContent =
+        `updated ${fmtHour(new Date())} · ${point.lat.toFixed(1)}°N ${point.lon.toFixed(1)}°E`;
+    } catch (err) {
+      content.classList.remove("loading");
+      statusMsg(status, `Could not load live forecasts (${err.message}).`, () => load(currentPoint()));
+    }
+  }
+
+  function render(d) {
+    const nowI = nowIndexOf(d.times);
+
+    lineChart(document.getElementById("chart-speed"), {
+      times: d.times,
+      series: [
+        { id: "blend", name: "Blend", color: BLEND_COLOR, values: d.blendSpeed, width: 3, endLabel: true },
+        ...MODELS.map(m => ({ id: m.key, name: m.name, color: m.color, values: d.perModel[m.key].speed, width: 1.6 })),
+      ],
+      unit: "m/s", decimals: 1, yMin: 0, nowIndex: nowI,
+      ariaLabel: "Wind speed for the next seven days, blend and six models",
+    });
+    directionStrip(document.getElementById("dir-strip"), d.times, d.blendDir, { step: 6, label: "wind" });
+
+    lineChart(document.getElementById("chart-gust"), {
+      times: d.times,
+      series: [{ id: "gust", name: "Blended gusts", color: BLEND_COLOR, values: d.blendGust, width: 2.5, endLabel: true }],
+      unit: "m/s", decimals: 1, yMin: 0, nowIndex: nowI,
+      ariaLabel: "Blended wind gusts for the next seven days",
+    });
+
+    lineChart(document.getElementById("chart-spread"), {
+      times: d.times,
+      series: [{ id: "spread", name: "Model spread", color: "--s2", values: d.spread, width: 2.5 }],
+      unit: "m/s", decimals: 1, yMin: 0, nowIndex: nowI,
+      ariaLabel: "Spread between the six models' wind speed for the next seven days",
+    });
+  }
+
+  initPointSelect(document.getElementById("pt"), load);
+  load(currentPoint());
+
+  // calendar coverage switcher
+  const calImg = document.getElementById("cal-img");
+  const calCap = document.getElementById("cal-cap");
+  document.querySelectorAll("#cal-seg button").forEach(b => {
+    b.addEventListener("click", () => {
+      document.querySelectorAll("#cal-seg button").forEach(o => o.setAttribute("aria-pressed", "false"));
+      b.setAttribute("aria-pressed", "true");
+      const pct = b.dataset.pct;
+      calImg.dataset.light = `../output/figures/wind_window_calendar_${pct}_light.png`;
+      calImg.dataset.dark = `../output/figures/wind_window_calendar_${pct}_dark.png`;
+      calImg.src = effectiveTheme() === "dark" ? calImg.dataset.dark : calImg.dataset.light;
+      calCap.textContent = `Sailing-window calendar — window when ≥ ${pct}% of the corridor qualifies.`;
+    });
+  });
+
+  // daily windows year/coverage switcher
+  const years = [2026, 2025, 2024, 2023, 2022, 2021];
+  const ysel = document.getElementById("dw-year");
+  years.forEach(y => {
+    const o = document.createElement("option");
+    o.value = y; o.textContent = y;
+    ysel.append(o);
+  });
+  const dwImg = document.getElementById("dw-img");
+  const dwCap = document.getElementById("dw-cap");
+  let dwPct = "50";
+  const updateDW = () => {
+    dwImg.src = `../output/figures/daily_windows/daily_window_${dwPct}pct_${ysel.value}.png`;
+    dwCap.textContent = `Daily windows, ${ysel.value} — ≥ ${dwPct}% of corridor.`;
+  };
+  ysel.addEventListener("change", updateDW);
+  document.querySelectorAll("#dw-seg button").forEach(b => {
+    b.addEventListener("click", () => {
+      document.querySelectorAll("#dw-seg button").forEach(o => o.setAttribute("aria-pressed", "false"));
+      b.setAttribute("aria-pressed", "true");
+      dwPct = b.dataset.pct;
+      updateDW();
+    });
+  });
+});
+</script>
+
+</body>
+</html>

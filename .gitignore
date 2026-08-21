@@ -4,3 +4,10 @@ output/figures/
 *.pyc
 __pycache__/
 credentials/
+wind_data/
+/wind_data/
+.agents/
+.claude/
+.env
+frontend/assets/mapbox-token.js
+route/forecast/gfs_latest.grb2

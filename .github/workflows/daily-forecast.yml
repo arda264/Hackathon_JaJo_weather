@@ -1,0 +1,58 @@
+name: Daily forecast route
+
+# Fetches the newest GFS cycle, re-optimises the Lowestoft -> IJmuiden route
+# against it, and replaces the route JSON and the two figures in place. The
+# commit is what triggers Vercel to redeploy, so the site shows today's run.
+
+on:
+  schedule:
+    # 11:30 UTC — comfortably after the 06z cycle finishes publishing (~4 h lag).
+    # fetch_forecast.py walks back to the newest published cycle anyway, so a
+    # late or skipped run still produces a valid forecast.
+    - cron: "30 11 * * *"
+  workflow_dispatch:
+
+# one run at a time: two jobs committing to main would race
+concurrency:
+  group: daily-forecast
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: route/requirements-daily.txt
+
+      - name: Install dependencies
+        run: pip install -r route/requirements-daily.txt
+
+      - name: Fetch the newest GFS cycle
+        run: python route/fetch_forecast.py
+
+      - name: Optimise today's route and redraw the figures
+        run: python route/daily_forecast.py
+
+      - name: Commit if anything changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/data/route-today.json \
+                  output/figures/daily/forecast_route_light.png \
+                  output/figures/daily/forecast_route_dark.png \
+                  route/forecast/cycle.json
+          if git diff --staged --quiet; then
+            echo "forecast unchanged — nothing to commit"
+          else
+            git commit -m "Daily forecast route: GFS $(date -u +'%Y-%m-%d %H:%MZ')"
+            git push
+          fi

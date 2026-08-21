@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DutchSail weather — forecast blend</title>
+<script>(function(){var q=new URLSearchParams(location.search).get("theme");var t=q||localStorage.getItem("ds-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>
+<link rel="stylesheet" href="./assets/style.css">
+<script src="./assets/common.js" defer></script>
+</head>
+<body>
+
+<header class="site-header"><div class="bar">
+  <a class="brand" href="./index.html">Dutch<span>Sail</span> weather</a>
+  <nav class="site-nav">
+    <a href="./index.html">Overview</a>
+    <a href="./current.html">Current</a>
+    <a href="./wind.html">Detailed wind</a>
+    <a href="./tide.html">Tide</a>
+    <a href="./forecast-blend.html" aria-current="page">Forecast blend</a>
+    <a href="./route.html">Route</a>
+  </nav>
+  <button class="theme-toggle" type="button">Theme: auto</button>
+</div></header>
+
+<main>
+  <h1 class="page-title">Forecast-model blend</h1>
+  <p class="page-sub">
+    Two learned weights per weather model — one for wind speed, one for wind direction —
+    fitted so the blended 10&nbsp;m wind matches ERA5 reanalysis as closely as possible
+    over the corridor. Speed is blended directly; direction is blended through unit
+    vectors, so 350° and 10° average to 0°, never 180°. The live Current and Detailed
+    wind pages apply these weights to today&rsquo;s forecasts.
+  </p>
+
+  <div class="tiles">
+    <div class="tile">
+      <div class="label">Blend speed RMSE (held-out)</div>
+      <div class="value">0.71<small>m/s</small></div>
+      <div class="delta good">−31% vs best single model (1.03)</div>
+    </div>
+    <div class="tile">
+      <div class="label">Blend direction MAE (held-out)</div>
+      <div class="value">6.1<small>°</small></div>
+      <div class="delta good">−21% vs best single model (7.7°)</div>
+    </div>
+    <div class="tile">
+      <div class="label">Models blended</div>
+      <div class="value">6</div>
+      <div class="delta">ECMWF · GFS · ICON · ARPEGE · HARMONIE · UKMO</div>
+    </div>
+    <div class="tile">
+      <div class="label">Evaluation window</div>
+      <div class="value">18,552<small>h</small></div>
+      <div class="delta">final 25% of the record, never trained on</div>
+    </div>
+  </div>
+
+  <section>
+    <h2>Learned weights &amp; held-out accuracy</h2>
+    <p class="section-sub">
+      Weights are constrained to the probability simplex (non-negative, each set sums
+      to 1), so a weight reads directly as &ldquo;how much to trust this model&rdquo;.
+      Fit on the first 75% of the record; every score below comes from the final 25%
+      the fit never saw.
+    </p>
+    <div class="fig-grid wide">
+      <figure class="fig">
+        <img data-light="../forecast_blend/results/blend_evaluation_light.png"
+             data-dark="../forecast_blend/results/blend_evaluation_dark.png"
+             src="../forecast_blend/results/blend_evaluation_light.png"
+             alt="Learned blend weights per model and held-out accuracy of the blend versus each individual model" loading="lazy">
+        <figcaption>Learned weights and held-out accuracy: the blend beats every individual model and the equal-weight ensemble on both speed and direction.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Held-out metrics</h2>
+    <div class="card">
+      <div class="data-table-wrap">
+        <table class="data-table model-table">
+          <thead><tr><th>Source</th><th>Speed RMSE (m/s)</th><th>Speed MAE (m/s)</th><th>Speed bias (m/s)</th><th>Direction MAE (°)</th></tr></thead>
+          <tbody>
+            <tr><td>ECMWF IFS 0.25°</td><td>1.37</td><td>0.96</td><td>−0.56</td><td>7.7</td></tr>
+            <tr><td>NOAA GFS</td><td>1.14</td><td>0.87</td><td>+0.35</td><td>8.8</td></tr>
+            <tr><td>DWD ICON-EU</td><td>1.07</td><td>0.82</td><td>+0.03</td><td>7.9</td></tr>
+            <tr><td>Météo-France ARPEGE</td><td>1.19</td><td>0.92</td><td>+0.04</td><td>9.9</td></tr>
+            <tr><td>KNMI HARMONIE-AROME</td><td>1.23</td><td>0.93</td><td>+0.30</td><td>11.6</td></tr>
+            <tr><td>UKMO Global 10 km</td><td>1.03</td><td>0.81</td><td>+0.25</td><td>8.6</td></tr>
+            <tr><td>Equal-weight mean</td><td>0.75</td><td>0.57</td><td>+0.07</td><td>6.6</td></tr>
+            <tr style="font-weight:650"><td>Learned blend</td><td>0.71</td><td>0.55</td><td>−0.05</td><td>6.1</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="card-sub" style="margin-top:10px">
+        Truth: ERA5 hourly 10&nbsp;m u/v at 4 corridor grid points · direction fitted and scored on
+        hours with ERA5 speed &gt; 2 m/s · source: <code>forecast_blend/results/metrics.csv</code>.
+      </p>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  Pipeline: <code>forecast_blend/fetch_forecasts.py</code> (archived forecasts from the Open-Meteo
+  Historical Forecast API) → <code>forecast_blend/train_blend.py</code> (constrained least squares vs ERA5).
+</footer>
+
+</body>
+</html>

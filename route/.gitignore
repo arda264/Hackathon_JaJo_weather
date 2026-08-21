@@ -1,0 +1,19 @@
+# IDE
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+.venv/
+venv/
+
+# Secrets
+.env
+
+# Office lock files
+~$*
+
+# Superseded decks, replaced by slides/robust_routing_pitch.pptx.
+# Safe to delete from your working copy.
+slides/robust_routing_principle*.pptx

@@ -1,0 +1,303 @@
+{
+  "reached_destination": true,
+  "remaining_nm": 0.471,
+  "duration_hours": 7.0,
+  "route": [
+    [
+      52.471314,
+      1.76794
+    ],
+    [
+      52.476409,
+      1.884365
+    ],
+    [
+      52.478794,
+      2.035735
+    ],
+    [
+      52.478055,
+      2.188319
+    ],
+    [
+      52.480493,
+      2.334727
+    ],
+    [
+      52.482952,
+      2.479141
+    ],
+    [
+      52.488268,
+      2.616395
+    ],
+    [
+      52.492194,
+      2.750524
+    ],
+    [
+      52.498753,
+      2.880801
+    ],
+    [
+      52.505278,
+      3.00956
+    ],
+    [
+      52.509204,
+      3.135876
+    ],
+    [
+      52.514416,
+      3.263384
+    ],
+    [
+      52.52089,
+      3.389755
+    ],
+    [
+      52.524816,
+      3.518725
+    ],
+    [
+      52.526156,
+      3.64685
+    ],
+    [
+      52.52491,
+      3.774885
+    ],
+    [
+      52.521314,
+      3.898964
+    ],
+    [
+      52.514942,
+      4.025827
+    ],
+    [
+      52.505961,
+      4.152559
+    ],
+    [
+      52.493997,
+      4.281826
+    ],
+    [
+      52.479176,
+      4.411771
+    ],
+    [
+      52.462179,
+      4.54642
+    ]
+  ],
+  "wind_vectors": [
+    {
+      "lat": 52.471314,
+      "lon": 1.76794,
+      "elapsed_hours": 0.0,
+      "u_knots": 4.363,
+      "v_knots": -8.996,
+      "speed_knots": 9.998,
+      "from_degrees": 334.1
+    },
+    {
+      "lat": 52.476409,
+      "lon": 1.884365,
+      "elapsed_hours": 0.333,
+      "u_knots": 3.383,
+      "v_knots": -14.432,
+      "speed_knots": 14.823,
+      "from_degrees": 346.8
+    },
+    {
+      "lat": 52.478794,
+      "lon": 2.035735,
+      "elapsed_hours": 0.667,
+      "u_knots": 3.102,
+      "v_knots": -14.62,
+      "speed_knots": 14.945,
+      "from_degrees": 348.0
+    },
+    {
+      "lat": 52.478055,
+      "lon": 2.188319,
+      "elapsed_hours": 1.0,
+      "u_knots": 1.946,
+      "v_knots": -14.438,
+      "speed_knots": 14.569,
+      "from_degrees": 352.3
+    },
+    {
+      "lat": 52.480493,
+      "lon": 2.334727,
+      "elapsed_hours": 1.333,
+      "u_knots": 1.993,
+      "v_knots": -14.083,
+      "speed_knots": 14.223,
+      "from_degrees": 351.9
+    },
+    {
+      "lat": 52.482952,
+      "lon": 2.479141,
+      "elapsed_hours": 1.667,
+      "u_knots": 1.483,
+      "v_knots": -13.254,
+      "speed_knots": 13.337,
+      "from_degrees": 353.6
+    },
+    {
+      "lat": 52.488268,
+      "lon": 2.616395,
+      "elapsed_hours": 2.0,
+      "u_knots": 1.29,
+      "v_knots": -12.731,
+      "speed_knots": 12.796,
+      "from_degrees": 354.2
+    },
+    {
+      "lat": 52.492194,
+      "lon": 2.750524,
+      "elapsed_hours": 2.333,
+      "u_knots": 0.741,
+      "v_knots": -12.301,
+      "speed_knots": 12.323,
+      "from_degrees": 356.6
+    },
+    {
+      "lat": 52.498753,
+      "lon": 2.880801,
+      "elapsed_hours": 2.667,
+      "u_knots": 0.315,
+      "v_knots": -12.098,
+      "speed_knots": 12.102,
+      "from_degrees": 358.5
+    },
+    {
+      "lat": 52.505278,
+      "lon": 3.00956,
+      "elapsed_hours": 3.0,
+      "u_knots": 0.168,
+      "v_knots": -11.578,
+      "speed_knots": 11.579,
+      "from_degrees": 359.2
+    },
+    {
+      "lat": 52.509204,
+      "lon": 3.135876,
+      "elapsed_hours": 3.333,
+      "u_knots": 0.175,
+      "v_knots": -11.831,
+      "speed_knots": 11.832,
+      "from_degrees": 359.2
+    },
+    {
+      "lat": 52.514416,
+      "lon": 3.263384,
+      "elapsed_hours": 3.667,
+      "u_knots": 0.609,
+      "v_knots": -11.579,
+      "speed_knots": 11.595,
+      "from_degrees": 357.0
+    },
+    {
+      "lat": 52.52089,
+      "lon": 3.389755,
+      "elapsed_hours": 4.0,
+      "u_knots": 0.655,
+      "v_knots": -11.987,
+      "speed_knots": 12.005,
+      "from_degrees": 356.9
+    },
+    {
+      "lat": 52.524816,
+      "lon": 3.518725,
+      "elapsed_hours": 4.333,
+      "u_knots": 1.199,
+      "v_knots": -11.691,
+      "speed_knots": 11.752,
+      "from_degrees": 354.1
+    },
+    {
+      "lat": 52.526156,
+      "lon": 3.64685,
+      "elapsed_hours": 4.667,
+      "u_knots": 1.148,
+      "v_knots": -11.68,
+      "speed_knots": 11.736,
+      "from_degrees": 354.4
+    },
+    {
+      "lat": 52.52491,
+      "lon": 3.774885,
+      "elapsed_hours": 5.0,
+      "u_knots": 1.122,
+      "v_knots": -11.079,
+      "speed_knots": 11.136,
+      "from_degrees": 354.2
+    },
+    {
+      "lat": 52.521314,
+      "lon": 3.898964,
+      "elapsed_hours": 5.333,
+      "u_knots": 1.371,
+      "v_knots": -11.517,
+      "speed_knots": 11.598,
+      "from_degrees": 353.2
+    },
+    {
+      "lat": 52.514942,
+      "lon": 4.025827,
+      "elapsed_hours": 5.667,
+      "u_knots": 1.97,
+      "v_knots": -11.43,
+      "speed_knots": 11.598,
+      "from_degrees": 350.2
+    },
+    {
+      "lat": 52.505961,
+      "lon": 4.152559,
+      "elapsed_hours": 6.0,
+      "u_knots": 1.966,
+      "v_knots": -11.868,
+      "speed_knots": 12.03,
+      "from_degrees": 350.6
+    },
+    {
+      "lat": 52.493997,
+      "lon": 4.281826,
+      "elapsed_hours": 6.333,
+      "u_knots": 2.629,
+      "v_knots": -12.015,
+      "speed_knots": 12.299,
+      "from_degrees": 347.7
+    },
+    {
+      "lat": 52.479176,
+      "lon": 4.411771,
+      "elapsed_hours": 6.667,
+      "u_knots": 5.515,
+      "v_knots": -13.283,
+      "speed_knots": 14.382,
+      "from_degrees": 337.5
+    },
+    {
+      "lat": 52.462179,
+      "lon": 4.54642,
+      "elapsed_hours": 7.0,
+      "u_knots": 5.783,
+      "v_knots": -13.359,
+      "speed_knots": 14.557,
+      "from_degrees": 336.6
+    }
+  ],
+  "source": "gfs",
+  "cycle": "2026-08-21T06:00:00+00:00",
+  "generated": "2026-08-21T10:24:20+00:00",
+  "current": {
+    "speed": 1.0,
+    "toward": 45.0
+  },
+  "note": "Optimised against NOAA GFS 2026-08-21 06:00 UTC, current 1 kt toward 45 T."
+}

@@ -1,0 +1,9 @@
+# Daily forecast job (.github/workflows/daily-forecast.yml).
+# Deliberately no pygrib: daily_forecast.py reads GRIB through xarray/cfgrib,
+# which ships binary wheels and needs no system ECCODES install.
+requests
+numpy
+xarray
+cfgrib
+eccodes
+matplotlib
