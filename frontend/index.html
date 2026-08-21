@@ -6,6 +6,7 @@
 <title>DutchSail weather — overview</title>
 <script>(function(){var q=new URLSearchParams(location.search).get("theme");var t=q||localStorage.getItem("ds-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="./assets/style.css">
+<script src="../output/scripts/api.js" defer></script>
 <script src="./assets/common.js" defer></script>
 </head>
 <body>
@@ -26,13 +27,12 @@
 <main>
   <h1 class="page-title">Southern North Sea — sailing overview</h1>
   <p class="page-sub">
-    Are the preferred conditions there or not, and what ECMWF says for the week ahead.
-    Times are shown in your local time.
+    Are the preferred conditions there or not, and what the models say for the week
+    ahead. Data is fetched and every graph rendered by the Claude agent
+    (<code>agent/run_agent.py</code>) — the page makes no forecast API calls.
   </p>
 
   <div class="filter-row">
-    <label for="pt">Location</label>
-    <select id="pt"></select>
     <span class="filter-note" id="updated"></span>
   </div>
 
@@ -51,12 +51,16 @@
     <section class="card chart-card" style="margin-top:14px">
       <div class="chart-head">
         <div>
-          <h3>Upcoming ECMWF wind forecast</h3>
-          <p class="card-sub">ECMWF IFS 0.25° — 10&nbsp;m wind speed for the next 7 days; arrows show where the wind blows toward.</p>
+          <h3>7-day wind outlook</h3>
+          <p class="card-sub">The learned blend over all six models, gusts, and model spread — rendered by the agent.</p>
         </div>
       </div>
-      <div id="chart-ecmwf"></div>
-      <div id="dir-ecmwf"></div>
+      <figure class="fig">
+        <img data-light="../output/figures/agent/wind_forecast_light.png"
+             data-dark="../output/figures/agent/wind_forecast_dark.png"
+             src="../output/figures/agent/wind_forecast_light.png"
+             alt="Seven-day wind forecast: blend over six models, gusts, and model spread">
+      </figure>
     </section>
   </div>
 
@@ -89,42 +93,31 @@
 </main>
 
 <footer class="site-footer">
-  Forecast data: Open-Meteo (live) · window criterion from <code>output/scripts/wind_window_days.py</code>.
+  Forecast data fetched by the Claude agent (<code>agent/run_agent.py</code>) —
+  Open-Meteo &amp; Copernicus Marine · window criterion from <code>output/scripts/wind_window_days.py</code>.
 </footer>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   const content = document.getElementById("content");
   const status = document.getElementById("status");
 
-  const inSector = d => (d >= 205 && d <= 235) || (d >= 305 && d <= 335);
-  const qualifies = (ms, d) => {
-    if (!Number.isFinite(ms) || !Number.isFinite(d)) return false;
-    const kt = msToKt(ms);
-    return kt >= 18 && kt <= 30 && inSector(d);
-  };
-
-  async function load(point) {
-    content.classList.add("loading");
-    status.innerHTML = "";
-    try {
-      const d = await fetchWind(point, 7);
-      render(d);
-      content.classList.remove("loading");
-      document.getElementById("updated").textContent =
-        `updated ${fmtHour(new Date())} · ${point.lat.toFixed(1)}°N ${point.lon.toFixed(1)}°E`;
-    } catch (err) {
-      content.classList.remove("loading");
-      statusMsg(status, `Could not load live forecasts (${err.message}).`, () => load(currentPoint()));
-    }
+  try {
+    const s = await fetchAgentSummary();
+    render(s);
+    content.classList.remove("loading");
+    document.getElementById("updated").textContent =
+      `agent run ${fmtFull(new Date(s.generated_at))} · ${s.point.name}`;
+  } catch (err) {
+    content.classList.remove("loading");
+    content.hidden = true;
+    statusMsg(status, `No agent data yet (${err.message}). ` +
+      `Run "python agent/run_agent.py" to fetch forecasts and build the graphs.`);
   }
 
-  function render(d) {
-    const nowI = nowIndexOf(d.times);
-    const spd = d.blendSpeed[nowI], dir = d.blendDir[nowI];
-
+  function render(s) {
     // right now
-    const met = qualifies(spd, dir);
+    const met = !!s.now.met;
     const nowEl = document.getElementById("cond-now");
     nowEl.className = `status-value ${met ? "met" : "not-met"}`;
     nowEl.innerHTML = "";
@@ -133,52 +126,30 @@ document.addEventListener("DOMContentLoaded", () => {
     mark.textContent = met ? "✓" : "✗";
     nowEl.append(mark, document.createTextNode(met ? "Conditions met right now" : "Not met right now"));
     document.getElementById("cond-detail").textContent =
-      Number.isFinite(spd) && Number.isFinite(dir)
-        ? `blend now: ${msToKt(spd).toFixed(0)} kt (${spd.toFixed(1)} m/s) from ${compass16(dir)} ${Math.round(dir)}°`
+      Number.isFinite(s.now.speed_ms) && Number.isFinite(s.now.dir_deg)
+        ? `blend now: ${msToKt(s.now.speed_ms).toFixed(0)} kt (${s.now.speed_ms.toFixed(1)} m/s) from ${compass16(s.now.dir_deg)} ${Math.round(s.now.dir_deg)}°`
         : "no blend value for the current hour";
 
-    // day by day: longest consecutive qualifying run within each local day
-    const byDay = new Map();
-    for (let i = 0; i < d.times.length; i++) {
-      const key = d.times[i].toDateString();
-      if (!byDay.has(key)) byDay.set(key, { date: d.times[i], hours: [] });
-      byDay.get(key).hours.push(qualifies(d.blendSpeed[i], d.blendDir[i]));
-    }
+    // day by day, straight from the agent's verdicts
     const strip = document.getElementById("cond-days");
     strip.innerHTML = "";
-    [...byDay.values()].slice(0, 7).forEach(day => {
-      let run = 0, best = 0;
-      for (const ok of day.hours) { run = ok ? run + 1 : 0; best = Math.max(best, run); }
-      const dayMet = best >= 6;
+    (s.days || []).slice(0, 7).forEach(day => {
       const cell = document.createElement("div");
-      cell.className = `day-cell ${dayMet ? "met" : "not-met"}`;
-      cell.title = `${fmtDay(day.date)}: longest qualifying stretch ${best} h (needs ≥ 6 h)`;
+      cell.className = `day-cell ${day.met ? "met" : "not-met"}`;
+      cell.title = `${day.label}: longest qualifying stretch ${day.best_run_h} h (needs ≥ 6 h)`;
       const dd = document.createElement("div");
       dd.className = "d-day";
-      dd.textContent = fmtDay(day.date);
+      dd.textContent = day.label;
       const dm = document.createElement("div");
       dm.className = "d-mark";
-      dm.textContent = dayMet ? "✓" : "✗";
+      dm.textContent = day.met ? "✓" : "✗";
       const dn = document.createElement("div");
       dn.className = "d-note";
-      dn.textContent = best > 0 ? `${best} h` : "—";
+      dn.textContent = day.best_run_h > 0 ? `${day.best_run_h} h` : "—";
       cell.append(dd, dm, dn);
       strip.append(cell);
     });
-
-    // ECMWF outlook
-    const ecmwf = d.perModel.ecmwf;
-    lineChart(document.getElementById("chart-ecmwf"), {
-      times: d.times,
-      series: [{ id: "ecmwf", name: "ECMWF IFS 0.25°", color: "--s2", values: ecmwf.speed, width: 2.5, endLabel: true }],
-      unit: "m/s", decimals: 1, yMin: 0, nowIndex: nowI,
-      ariaLabel: "ECMWF wind speed forecast for the next seven days",
-    });
-    directionStrip(document.getElementById("dir-ecmwf"), d.times, ecmwf.dir, { step: 6, label: "wind" });
   }
-
-  initPointSelect(document.getElementById("pt"), load);
-  load(currentPoint());
 });
 </script>
 
