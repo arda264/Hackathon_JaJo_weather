@@ -8,6 +8,43 @@
 <link rel="stylesheet" href="./assets/style.css">
 <script src="../output/scripts/api.js" defer></script>
 <script src="./assets/common.js" defer></script>
+<style>
+/* Conditions dashboard — scoped to this page only, so assets/style.css is untouched.
+   Status hues are the fixed status palette (never themed); on the light surface the
+   amber is deliberately below 3:1, so every cell also carries a glyph, a number, and
+   a word. Colour never carries the meaning on its own. */
+.dash { --ok: #0ca30c; --warn: #fab219; --bad: #d03b3b; }
+.dash .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.dash-wrap { overflow-x: auto; margin-top: 12px; }
+.dash-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.dash-table th, .dash-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+.dash-table thead th { color: var(--ink-2); font-weight: 600; font-size: 12.5px; letter-spacing: .01em; white-space: nowrap; }
+.dash-table tbody tr:last-child th, .dash-table tbody tr:last-child td { border-bottom: 0; }
+.dash-table tbody th { color: var(--ink); font-weight: 600; white-space: nowrap; }
+.dash-day-sub { display: block; color: var(--muted); font-weight: 400; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.dash-chip { display: inline-flex; align-items: baseline; gap: 7px; padding: 4px 9px 4px 7px; border-radius: 7px;
+  border: 1px solid color-mix(in srgb, var(--chip) 45%, transparent);
+  background: color-mix(in srgb, var(--chip) 12%, transparent); }
+.dash-chip[data-status="good"]     { --chip: var(--ok); }
+.dash-chip[data-status="warning"]  { --chip: var(--warn); }
+.dash-chip[data-status="critical"] { --chip: var(--bad); }
+.dash-chip[data-status="unknown"]  { --chip: var(--muted); }
+.dash-glyph { color: var(--chip); font-weight: 700; font-size: 13px; line-height: 1; }
+.dash-val { color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dash-label { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.dash-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; color: var(--muted); font-size: 12px; }
+.dash-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.dash-key { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+.dash-note { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.5; }
+/* combined verdict on the 7-day strip */
+.day-cell[data-combined] { border-color: color-mix(in srgb, var(--chip) 50%, var(--border)); background: color-mix(in srgb, var(--chip) 10%, transparent); }
+.day-cell[data-combined="good"]     { --chip: #0ca30c; }
+.day-cell[data-combined="warning"]  { --chip: #fab219; }
+.day-cell[data-combined="critical"] { --chip: #d03b3b; }
+.day-cell[data-combined="unknown"]  { --chip: #898781; }
+.day-cell[data-combined] .d-mark { color: var(--chip); }
+@media (max-width: 620px) { .dash-table { font-size: 12.5px; } .dash-label { display: none; } }
+</style>
 </head>
 <body>
 
@@ -47,6 +84,45 @@
       <div id="cond-now" class="status-value"></div>
       <div id="cond-detail" class="filter-note" style="margin-top:4px"></div>
       <div id="cond-days" class="day-strip"></div>
+      <p id="cond-combined-note" class="dash-note"></p>
+    </section>
+
+    <section class="card dash" style="margin-top:14px">
+      <h3>Conditions dashboard</h3>
+      <p class="card-sub">
+        Wind, wave and current graded per day against the thresholds below. Each cell
+        shows the grade, the value it was graded on, and the word — never colour alone.
+      </p>
+
+      <div class="dash-wrap">
+        <table class="dash-table">
+          <caption class="sr-only">Daily wind, wave and current grades for the next seven days</caption>
+          <thead>
+            <tr>
+              <th scope="col">Day</th>
+              <th scope="col">Wind</th>
+              <th scope="col">Wave</th>
+              <th scope="col">Current</th>
+            </tr>
+          </thead>
+          <tbody id="dash-body"></tbody>
+        </table>
+      </div>
+
+      <div class="dash-legend">
+        <span><i class="dash-key" style="background:#0ca30c"></i> ✓ Good</span>
+        <span><i class="dash-key" style="background:#fab219"></i> ! Marginal</span>
+        <span><i class="dash-key" style="background:#d03b3b"></i> ✗ Poor</span>
+      </div>
+
+      <p class="dash-note">
+        <strong>Wind</strong> — good inside the window (18–30 kt from 205–235° or
+        305–335°), marginal within 2 kt and 5° of it, otherwise poor.
+        <strong>Wave</strong> — good under 1.5 m, marginal 1.5–2 m, poor above 2 m
+        (total significant height, wind-sea and swell combined).
+        <strong>Current</strong> — good up to 1 kt, marginal 1–2 kt, poor above 2 kt.
+      </p>
+      <p id="dash-source" class="dash-note"></p>
     </section>
 
     <section class="card chart-card" style="margin-top:14px">
@@ -107,17 +183,24 @@ document.addEventListener("DOMContentLoaded", async () => {
   const content = document.getElementById("content");
   const status = document.getElementById("status");
 
-  try {
-    const s = await fetchAgentSummary();
-    render(s);
-    content.classList.remove("loading");
-    document.getElementById("updated").textContent =
-      `agent run ${fmtFull(new Date(s.generated_at))} · ${s.point.name}`;
-  } catch (err) {
-    content.classList.remove("loading");
-    content.hidden = true;
-    statusMsg(status, `No agent data yet (${err.message}). ` +
-      `Run "python agent/run_agent.py" to fetch forecasts and build the graphs.`);
+  // declared as a function and called at the very end: everything below is `const`,
+  // so running this first would hit the temporal dead zone
+  async function boot() {
+    try {
+      const s = await fetchAgentSummary();
+      render(s);
+      // the dashboard reads extra files; a failure there must not blank the page
+      try { await renderDashboard(s); }
+      catch (e) { document.getElementById("dash-source").textContent = `Dashboard unavailable (${e.message}).`; }
+      content.classList.remove("loading");
+      document.getElementById("updated").textContent =
+        `agent run ${fmtFull(new Date(s.generated_at))} · ${s.point.name}`;
+    } catch (err) {
+      content.classList.remove("loading");
+      content.hidden = true;
+      statusMsg(status, `No agent data yet (${err.message}). ` +
+        `Run "python agent/run_agent.py" to fetch forecasts and build the graphs.`);
+    }
   }
 
   function render(s) {
@@ -155,6 +238,194 @@ document.addEventListener("DOMContentLoaded", async () => {
       strip.append(cell);
     });
   }
+
+  // ---- conditions dashboard ------------------------------------------------
+  // summary.json carries per-day wind verdicts but no per-day wave or current, so
+  // those two columns read the area-of-interest timeseries that
+  // scripts/postprocess_*.py write. The filenames are date-stamped, which is why
+  // they are named here rather than derived; a miss degrades to "no data".
+  const WAVE_CSV = "../sample_forecast_data/postprocessed/wave_conditions_area_of_interest_2026-08-21T14_to_2026-08-27T23.csv";
+  const CURRENT_CSV = "../sample_forecast_data/postprocessed/currents_conditions_area_of_interest_2026-08-21T14_to_2026-08-28T00.csv";
+
+  const GRADES = {
+    good:     { glyph: "✓", label: "Good" },
+    warning:  { glyph: "!", label: "Marginal" },
+    critical: { glyph: "✗", label: "Poor" },
+    unknown:  { glyph: "–", label: "No data" },
+  };
+  const SCORE = { good: 2, warning: 1, critical: 0 };
+  const within = (v, lo, hi) => v >= lo && v <= hi;
+
+  // The window is 18–30 kt from 205–235° or 305–335°; 2 kt and 5° outside it is marginal.
+  function gradeWind(kt, deg) {
+    if (!Number.isFinite(kt) || !Number.isFinite(deg)) return "unknown";
+    const dirIn = pad => within(deg, 205 - pad, 235 + pad) || within(deg, 305 - pad, 335 + pad);
+    if (within(kt, 18, 30) && dirIn(0)) return "good";
+    if (within(kt, 16, 32) && dirIn(5)) return "warning";
+    return "critical";
+  }
+  const gradeWave = m =>
+    !Number.isFinite(m) ? "unknown" : m < 1.5 ? "good" : m <= 2 ? "warning" : "critical";
+  const gradeCurrent = kt =>
+    !Number.isFinite(kt) ? "unknown" : kt <= 1 ? "good" : kt <= 2 ? "warning" : "critical";
+
+  async function loadCsv(url) {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error(String(res.status));
+    const [header, ...rows] = (await res.text()).trim().split(/\r?\n/);
+    const cols = header.split(",");
+    return rows.map(line => {
+      const cells = line.split(",");
+      return Object.fromEntries(cols.map((c, i) => [c, cells[i]]));
+    });
+  }
+
+  // hourly spatial means -> one mean and one peak per calendar day
+  function byDay(rows, valueOf) {
+    const acc = {};
+    rows.forEach(r => {
+      const v = valueOf(r);
+      if (!Number.isFinite(v)) return;
+      const day = String(r.time).slice(0, 10);
+      (acc[day] = acc[day] || []).push(v);
+    });
+    const out = {};
+    Object.entries(acc).forEach(([d, vs]) => {
+      out[d] = { mean: vs.reduce((a, b) => a + b, 0) / vs.length, peak: Math.max(...vs) };
+    });
+    return out;
+  }
+
+  // summary.json exposes no per-day wind speed/direction, so the threshold rule runs
+  // on what it does expose — the blend for the current hour on today's row, and
+  // per-day values if a later agent run starts emitting them. Failing both, the day
+  // is graded on how long it stays inside the window.
+  function windForDay(day, s, isToday) {
+    const kt = Number.isFinite(day.speed_kt) ? day.speed_kt
+      : Number.isFinite(day.speed_ms) ? msToKt(day.speed_ms)
+      : isToday && Number.isFinite(s.now && s.now.speed_ms) ? msToKt(s.now.speed_ms) : NaN;
+    const deg = Number.isFinite(day.dir_deg) ? day.dir_deg
+      : isToday && Number.isFinite(s.now && s.now.dir_deg) ? s.now.dir_deg : NaN;
+
+    if (Number.isFinite(kt) && Number.isFinite(deg)) {
+      return {
+        grade: gradeWind(kt, deg),
+        value: `${kt.toFixed(0)} kt · ${Math.round(deg)}°`,
+        title: `blend ${kt.toFixed(1)} kt from ${compass16(deg)} ${Math.round(deg)}° — `
+             + `window is 18–30 kt from 205–235° or 305–335°, marginal within 2 kt and 5°`,
+      };
+    }
+    const h = Number(day.best_run_h) || 0;
+    return {
+      grade: day.met ? "good" : h > 0 ? "warning" : "critical",
+      value: `${h} h in window`,
+      title: `summary.json has no wind speed/direction for this day, so it is graded on `
+           + `the ${h} h spent inside the window (needs ≥ 6 h). Not the ±2 kt / ±5° rule.`,
+    };
+  }
+
+  function cell(grade, value, title) {
+    const td = document.createElement("td");
+    const chip = document.createElement("span");
+    chip.className = "dash-chip";
+    chip.dataset.status = grade;
+    if (title) chip.title = title;
+    const g = document.createElement("span");
+    g.className = "dash-glyph";
+    g.setAttribute("aria-hidden", "true");
+    g.textContent = GRADES[grade].glyph;
+    const v = document.createElement("span");
+    v.className = "dash-val";
+    v.textContent = value;
+    const l = document.createElement("span");
+    l.className = "dash-label";
+    l.textContent = GRADES[grade].label;
+    chip.append(g, v, l);
+    td.append(chip);
+    return td;
+  }
+
+  function combine(grades) {
+    const scored = grades.filter(g => g in SCORE);
+    if (!scored.length) return { grade: "unknown", mean: NaN };
+    const mean = scored.reduce((a, g) => a + SCORE[g], 0) / scored.length;
+    return { grade: mean >= 1.5 ? "good" : mean >= 0.75 ? "warning" : "critical", mean };
+  }
+
+  async function renderDashboard(s) {
+    const body = document.getElementById("dash-body");
+    const days = (s.days || []).slice(0, 7);
+    const today = new Date().toISOString().slice(0, 10);
+
+    let waves = {}, currents = {};
+    const missing = [];
+    try {
+      waves = byDay(await loadCsv(WAVE_CSV), r => Math.hypot(+r.VHM0_WW, +r.VHM0_SW1));
+    } catch (e) { missing.push("wave"); }
+    try {
+      currents = byDay(await loadCsv(CURRENT_CSV), r => msToKt(+r.speed));
+    } catch (e) { missing.push("current"); }
+
+    body.innerHTML = "";
+    const strip = [...document.querySelectorAll("#cond-days .day-cell")];
+
+    days.forEach((day, i) => {
+      const wind = windForDay(day, s, day.date === today);
+      const wv = waves[day.date];
+      const cu = currents[day.date];
+      const waveGrade = gradeWave(wv && wv.mean);
+      const curGrade = gradeCurrent(cu && cu.mean);
+
+      const tr = document.createElement("tr");
+      const th = document.createElement("th");
+      th.scope = "row";
+      th.textContent = day.label;
+      const sub = document.createElement("span");
+      sub.className = "dash-day-sub";
+      sub.textContent = day.date;
+      th.append(sub);
+      tr.append(
+        th,
+        cell(wind.grade, wind.value, wind.title),
+        cell(waveGrade, wv ? `${wv.mean.toFixed(2)} m` : "—",
+          wv ? `daily mean total significant height ${wv.mean.toFixed(2)} m, peak ${wv.peak.toFixed(2)} m `
+             + `(wind-sea and swell combined) — good < 1.5 m, marginal 1.5–2 m, poor > 2 m` : ""),
+        cell(curGrade, cu ? `${cu.mean.toFixed(2)} kt` : "—",
+          cu ? `daily mean tidal stream ${cu.mean.toFixed(2)} kt, peak ${cu.peak.toFixed(2)} kt `
+             + `— good ≤ 1 kt, marginal 1–2 kt, poor > 2 kt` : ""),
+      );
+      body.append(tr);
+
+      // colour the 7-day strip by the average of the three factors
+      const cmb = combine([wind.grade, waveGrade, curGrade]);
+      const dayCell = strip[i];
+      if (dayCell) {
+        dayCell.dataset.combined = cmb.grade;
+        const mark = dayCell.querySelector(".d-mark");
+        if (mark) mark.textContent = GRADES[cmb.grade].glyph;
+        dayCell.title = `${day.label}: ${GRADES[cmb.grade].label.toLowerCase()} overall`
+          + (Number.isFinite(cmb.mean) ? ` (${cmb.mean.toFixed(2)} of 2)` : "")
+          + ` — wind ${GRADES[wind.grade].label.toLowerCase()}, `
+          + `wave ${GRADES[waveGrade].label.toLowerCase()}, `
+          + `current ${GRADES[curGrade].label.toLowerCase()}. `
+          + `Longest qualifying wind stretch ${day.best_run_h} h (needs ≥ 6 h).`;
+      }
+    });
+
+    document.getElementById("cond-combined-note").textContent =
+      "Day colours average the three factors below — good 2, marginal 1, poor 0; "
+      + "green from 1.5, amber from 0.75. Hover a day for the breakdown.";
+
+    const src = document.getElementById("dash-source");
+    src.textContent = missing.length
+      ? `No ${missing.join(" or ")} data found — those columns read the postprocessed `
+        + `area-of-interest CSVs, whose filenames carry the forecast date. Re-run `
+        + `scripts/postprocess_*.py and update the paths in this page.`
+      : "Wind from the agent's blended forecast; wave and current from the postprocessed "
+        + "Copernicus area-of-interest timeseries (daily means, peaks in the tooltips).";
+  }
+
+  await boot();
 });
 </script>
 
