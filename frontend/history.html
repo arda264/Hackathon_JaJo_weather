@@ -28,12 +28,37 @@
 <main>
   <h1 class="page-title">Historical weather conditions</h1>
   <p class="page-sub">
-    Past weather patterns and historical data for the crossing area.
+    Past weather patterns and historical data for the crossing area, covering the
+    Lowestoft–IJmuiden track.
   </p>
 
   <div class="filter-row">
     <span class="filter-note" id="updated"></span>
   </div>
+
+  <section style="margin-top:34px">
+    <h2>Wind and wave roses — Lowestoft–IJmuiden track</h2>
+    <p class="section-sub">
+      Frequency of wind and wave conditions by direction along the crossing, derived from
+      multi-year model data (2020–2025). These roses summarize how often winds and waves
+      come from each compass sector, and at what strength, giving a sense of the typical
+      and extreme conditions to expect on the route.
+    </p>
+    <div class="fig-grid wide">
+      <figure class="fig">
+        <img src="../output/figures/wind_rose_2020_2025.png"
+             alt="Wind rose showing wind speed and direction frequency, 2020-2025"
+             loading="lazy">
+        <figcaption>Wind rose (2020–2025) — frequency of wind speed and direction.</figcaption>
+      </figure>
+      <figure class="fig">
+        <img src="../output/figures/wave_rose_weather_windows_2020_2025.png"
+             alt="Wave rose showing significant wave height and direction frequency during weather windows, 2020-2025"
+             loading="lazy">
+        <figcaption>Wave rose (2020–2025) — significant wave height and direction during favorable weather windows.</figcaption>
+      </figure>
+    </div>
+  </section>
 
   <div id="content" class="loading">
   </div>
