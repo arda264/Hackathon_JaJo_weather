@@ -10,7 +10,8 @@ steepness), with swell (VHM0_SW1, VTM01_SW1, VMDR_SW1) drawn in blue and
 wind-sea (VHM0_WW, VTM01_WW, VMDR_WW) drawn in red. Also computes wave
 steepness (Hs / (g * Tm01^2 / (2*pi))) for both wind-sea and swell, and
 saves the full aggregated timeseries (heights, periods, directions,
-steepness) as a NetCDF file to sample_forecast_data/preprocessed/.
+steepness) as a NetCDF file (and an equivalent CSV file) to
+sample_forecast_data/preprocessed/.
 
 Run with the `metocean` pixi environment, e.g.:
     pixi run -e metocean python scripts/check_wave_conditions_area_of_interest.py
@@ -184,6 +185,10 @@ def main():
     )
     output_ds.to_netcdf(nc_output_file)
     print(f"Saved timeseries NetCDF to {nc_output_file}")
+
+    csv_output_file = nc_output_file.with_suffix(".csv")
+    output_ds.to_dataframe().to_csv(csv_output_file, float_format="%.3f")
+    print(f"Saved timeseries CSV to {csv_output_file}")
 
     fig, axes = plt.subplots(4, 1, figsize=(12, 12), sharex=True, constrained_layout=True)
 
