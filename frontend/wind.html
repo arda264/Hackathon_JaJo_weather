@@ -29,7 +29,7 @@
   <h1 class="page-title">Detailed wind — 7-day outlook</h1>
   <p class="page-sub">
     Hourly 10&nbsp;m wind for the week ahead: the learned blend drawn over each of the six
-    models it combines, plus gusts and model spread. Fetched and rendered by the Claude
+    models it combines, plus gusts. Fetched and rendered by the Claude
     agent — refresh it with <code>python agent/run_agent.py</code>.
   </p>
 
@@ -41,15 +41,15 @@
     <section class="card chart-card">
       <div class="chart-head">
         <div>
-          <h3>Wind speed, gusts, and model spread</h3>
-          <p class="card-sub">Top: the blend (bold) over every individual model. Middle: blended gusts. Bottom: max&nbsp;−&nbsp;min across the six models — small spread, trustworthy forecast.</p>
+          <h3>Wind speed and gusts</h3>
+          <p class="card-sub">Top: the blend (bold) over every individual model. Bottom: blended gusts, with the individual models behind them.</p>
         </div>
       </div>
       <figure class="fig">
         <img data-light="../output/figures/agent/wind_forecast_light.png"
              data-dark="../output/figures/agent/wind_forecast_dark.png"
              src="../output/figures/agent/wind_forecast_light.png"
-             alt="Seven-day wind forecast: blend over six models, gusts, and model spread">
+             alt="Seven-day wind forecast: blend over six models, and gusts">
       </figure>
     </section>
   </div>

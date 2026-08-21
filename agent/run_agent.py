@@ -183,9 +183,9 @@ frontend/assets/style.css first and match its palette: figure/axes backgrounds s
 match the site's surface colors for each theme, text its ink colors, and series its
 --s1..--s7 accent colors. Timestamps in figures: label as UTC.
 
-1. wind_forecast     — 7-day hourly wind, 3 stacked panels: (a) blend speed (bold)
-                       over all six models with a legend, (b) blended gusts,
-                       (c) model spread. m/s.
+1. wind_forecast     — 7-day hourly wind, 2 stacked panels: (a) blend speed (bold)
+                       over all six models with a legend, (b) blended gusts. m/s.
+                       No spread panel — "now".spread_ms still carries the number.
 2. wind_next24       — next 24 h blended wind speed with direction arrows along the
                        time axis (arrows point where the wind blows TOWARD).
 3. tide              — 5-day marine outlook, 3 stacked panels: (a) sea level (m MSL)
