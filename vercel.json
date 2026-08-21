@@ -2,17 +2,9 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "builds": [
-    {
-      "src": "route/api/index.py",
-      "use": "@vercel/python",
-      "config": { "includeFiles": "route/{route.py,polars.json,forecast/grib.grb2}" }
-    },
     { "src": "**/*", "use": "@vercel/static" }
   ],
   "redirects": [
     { "source": "/", "destination": "/frontend/" }
-  ],
-  "rewrites": [
-    { "source": "/api/route", "destination": "/route/api/index.py" }
   ]
 }

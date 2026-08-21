@@ -46,26 +46,28 @@ The site deploys as-is — no build step. The whole repo is served statically
 
 Or from the CLI: `npx vercel` from the repo root (then `npx vercel --prod`).
 
-The same `vercel.json` also builds `route/api/index.py` as a Python function and
-rewrites `/api/route` onto it, which is what makes the **Update route** control on
-`route.html` recompute live.
+The deploy is **static only**. `route.html`'s **Update route** control needs a live
+optimiser at `/api/route`, and that endpoint is **not deployed** — the page runs on
+its stored sample route instead and says so in a banner.
 
-**This endpoint is configured but unverified — check it on the first deploy.** Two
-things could not be tested locally:
+It was tried and reverted: building `route/api/index.py` with `@vercel/python`
+fails, because the optimiser needs `pygrib` to read the forecast GRIB and that
+pulls in ECCODES, a native library the Vercel Python runtime does not provide. A
+failing function build fails the **whole** deployment, so the site stops updating
+entirely — which is worse than losing one button.
 
-1. It needs `pygrib` (see `route/api/requirements.txt`) to read the forecast GRIB.
-   That is a heavy native dependency (ECCODES) and may simply not build in the
-   Vercel Python runtime.
-2. The `builds` array here is the legacy form — forced, because `pyproject.toml`
-   makes Vercel auto-detect Python for the whole repo. The Python build is listed
-   **before** the `**/*` static catch-all so it claims `route/api/index.py` first,
-   and the rewrite destination may need to be `/route/api/index` (no extension)
-   depending on how the legacy builder names its output.
+To bring the endpoint back you need a runtime that can install `pygrib` (a
+container-based host, or a Vercel function with a custom image), then re-add to
+`vercel.json`:
 
-If either is wrong the endpoint 404s or 500s, the page falls back to the stored
-sample route (see below), and nothing else on the site is affected. Verify with
-`curl -X POST https://<project>.vercel.app/api/route -H 'Content-Type:
-application/json' -d '{"current":{"speed":1,"toward":45}}'`.
+```json
+{ "src": "route/api/index.py", "use": "@vercel/python",
+  "config": { "includeFiles": "route/{route.py,polars.json,forecast/grib.grb2}" } }
+```
+
+listed **before** the `**/*` static entry, plus a rewrite from `/api/route`. Check
+the rewrite destination — the legacy builder may want `/route/api/index` without
+the extension.
 
 ## Notes
 
