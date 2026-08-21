@@ -30,6 +30,18 @@ python -m http.server 8000
 then open <http://localhost:8000/frontend/>. Opening `frontend/index.html` directly
 from disk also works — the live pages call the Open-Meteo APIs over HTTPS.
 
+## Deploy on Vercel
+
+The site deploys as-is — no build step. The whole repo is served statically
+(the pages reference figures in `output/` and `forecast_blend/`), and the root
+`vercel.json` redirects `/` to `/frontend/`.
+
+1. [vercel.com/new](https://vercel.com/new) → import this GitHub repo.
+2. Framework preset **Other**, leave build command and output directory empty.
+3. Deploy. The site lands on `https://<project>.vercel.app/` (→ `/frontend/`).
+
+Or from the CLI: `npx vercel` from the repo root (then `npx vercel --prod`).
+
 ## Notes
 
 - Blend weights are embedded in `assets/common.js`; re-copy them from
