@@ -345,11 +345,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     return td;
   }
 
-  function combine(grades) {
-    const scored = grades.filter(g => g in SCORE);
-    if (!scored.length) return { grade: "unknown", mean: NaN };
-    const mean = scored.reduce((a, g) => a + SCORE[g], 0) / scored.length;
-    return { grade: mean >= 1.5 ? "good" : mean >= 0.75 ? "warning" : "critical", mean };
+  // Wind gates the day; wave and current can only pull it down, never rescue it.
+  // Reds are checked before greens, so a red factor is never outvoted by two greens.
+  function combine(wind, others) {
+    const known = [wind, ...others].filter(g => g in SCORE);
+    if (!known.length) return { grade: "unknown", why: "no data" };
+
+    const reds = others.filter(g => g === "critical").length;
+    const greens = known.filter(g => g === "good").length;
+
+    if (wind === "critical") return { grade: "critical", why: "wind is poor" };
+    if (wind === "warning" && reds) return { grade: "critical", why: "wind marginal and something is poor" };
+    if (wind === "good" && reds) return { grade: "warning", why: "wind good but something is poor" };
+    if (greens >= 2) return { grade: "good", why: `${greens} of 3 factors good` };
+    return { grade: "warning", why: "nothing poor, but fewer than two factors good" };
   }
 
   async function renderDashboard(s) {
@@ -396,25 +405,28 @@ document.addEventListener("DOMContentLoaded", async () => {
       );
       body.append(tr);
 
-      // colour the 7-day strip by the average of the three factors
-      const cmb = combine([wind.grade, waveGrade, curGrade]);
+      // colour the 7-day strip by the combined verdict
+      const cmb = combine(wind.grade, [waveGrade, curGrade]);
       const dayCell = strip[i];
       if (dayCell) {
         dayCell.dataset.combined = cmb.grade;
         const mark = dayCell.querySelector(".d-mark");
         if (mark) mark.textContent = GRADES[cmb.grade].glyph;
         dayCell.title = `${day.label}: ${GRADES[cmb.grade].label.toLowerCase()} overall`
-          + (Number.isFinite(cmb.mean) ? ` (${cmb.mean.toFixed(2)} of 2)` : "")
-          + ` — wind ${GRADES[wind.grade].label.toLowerCase()}, `
+          + ` — ${cmb.why}`
+          + ` · wind ${GRADES[wind.grade].label.toLowerCase()}, `
           + `wave ${GRADES[waveGrade].label.toLowerCase()}, `
           + `current ${GRADES[curGrade].label.toLowerCase()}. `
           + `Longest qualifying wind stretch ${day.best_run_h} h (needs ≥ 6 h).`;
       }
     });
 
-    document.getElementById("cond-combined-note").textContent =
-      "Day colours average the three factors below — good 2, marginal 1, poor 0; "
-      + "green from 1.5, amber from 0.75. Hover a day for the breakdown.";
+    document.getElementById("cond-combined-note").innerHTML =
+      "Day colours combine the three factors below, with wind as the gate: "
+      + "<strong>poor</strong> if wind is poor, or if wind is marginal and anything else is poor; "
+      + "<strong>marginal</strong> if wind is good but something else is poor; "
+      + "<strong>good</strong> only when at least two factors are good. "
+      + "Hover a day for the reasoning.";
 
     const src = document.getElementById("dash-source");
     src.textContent = missing.length
