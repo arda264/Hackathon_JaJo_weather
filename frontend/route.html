@@ -6,6 +6,7 @@
 <title>DutchSail weather — record route</title>
 <script>(function(){var q=new URLSearchParams(location.search).get("theme");var t=q||localStorage.getItem("ds-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="./assets/style.css">
+<script src="./scripts/api.js" defer></script>
 <script src="./assets/common.js" defer></script>
 <link href="https://api.mapbox.com/mapbox-gl-js/v3.26.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.26.0/mapbox-gl.js"></script>
@@ -203,12 +204,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // .env by scripts/write_mapbox_token.py (locally) or by the Vercel build command.
   const MAPBOX_TOKEN = window.MAPBOX_TOKEN || "";
   const MAP_STYLE = "mapbox://styles/mapbox/outdoors-v12";
-  const TODAY_URL = "./data/route-today.json";     // rewritten daily by CI
-  const SAMPLE_URL = "./data/route-sample.json";   // last-resort synthetic fallback
-  const ROBUSTNESS_URL = "../route/app/gribs/robustness.json";
-  const SUMMARY_URL = "../route/app/gribs/summary.json";
-  const API_URL = "/api/route";
-  const API_TIMEOUT_MS = 45000;
 
   const statusEl = document.getElementById("route-status");
   const noteEl = document.getElementById("route-note");
@@ -351,42 +346,13 @@ document.addEventListener("DOMContentLoaded", () => {
     map.fitBounds(bounds, { padding: 60, duration: 0 });
   }
 
-  /* ---------------- data ---------------- */
-
-  async function fetchLiveRoute(current) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), API_TIMEOUT_MS);
-    try {
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ current }),
-        signal: ctrl.signal,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `optimiser returned ${res.status}`);
-      return data;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
+  /* ---------------- data — all fetching lives in scripts/api.js ---------------- */
 
   const fmtCycle = iso => {
     const d = new Date(iso);
     return Number.isNaN(+d) ? iso
       : `${d.toUTCString().slice(5, 16)} ${String(d.getUTCHours()).padStart(2, "0")}:00 UTC`;
   };
-
-  // stored → today's CI-generated route first, synthetic sample only if that is missing
-  async function fetchStoredRoute() {
-    for (const url of [TODAY_URL, SAMPLE_URL]) {
-      try {
-        const res = await fetch(url);
-        if (res.ok) return await res.json();
-      } catch { /* try the next one */ }
-    }
-    return null;
-  }
 
   async function load(current, { live = false } = {}) {
     buttonEl.disabled = true;
@@ -453,10 +419,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /* ---------------- brief ---------------- */
 
-  fetch(SUMMARY_URL)
-    .then(r => r.ok ? r.json() : null)
-    .then(d => { document.getElementById("insight").textContent = d?.summary || "No brief available."; })
-    .catch(() => { document.getElementById("insight").textContent = "No brief available."; });
+  fetchRouteSummary()
+    .then(d => { document.getElementById("insight").textContent = d?.summary || "No brief available."; });
 
   /* ---------------- robustness KPIs ---------------- */
 
@@ -496,8 +460,7 @@ document.addEventListener("DOMContentLoaded", () => {
     paint();
   }
 
-  fetch(ROBUSTNESS_URL)
-    .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+  fetchRobustness()
     .then(d => {
       recordHours = d.record_hours;
       document.getElementById("t-record-note").textContent =

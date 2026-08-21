@@ -1,4 +1,6 @@
-/* DutchSail weather frontend — shared helpers, data access, and chart component. */
+/* DutchSail weather frontend — shared UI helpers and chart component.
+ * All data access (constants, endpoints, fetch functions) lives in
+ * scripts/api.js — include that first; nothing in this file calls fetch(). */
 "use strict";
 
 /* ---------------- theme ---------------- */
@@ -47,32 +49,7 @@ function initChrome() {
   swap();
 }
 
-/* ---------------- project data ---------------- */
-
-// learned weights from forecast_blend/results/weights.json (train_until 2026-02-01)
-const BLEND = {
-  speed: { ecmwf: 0.350273, gfs: 0.238027, icon: 0.193598, arpege: 0.0, harmonie: 0.135443, ukmo: 0.082658 },
-  direction: { ecmwf: 0.298035, gfs: 0.219159, icon: 0.272952, arpege: 0.047509, harmonie: 0.03144, ukmo: 0.130904 },
-};
-
-// fixed color assignment — color follows the entity, never its rank
-const MODELS = [
-  { key: "ecmwf", id: "ecmwf_ifs025", name: "ECMWF IFS 0.25°", color: "--s2" },
-  { key: "gfs", id: "gfs_global", name: "NOAA GFS", color: "--s3" },
-  { key: "icon", id: "icon_eu", name: "DWD ICON-EU", color: "--s4" },
-  { key: "arpege", id: "meteofrance_arpege_europe", name: "ARPEGE Europe", color: "--s5" },
-  { key: "harmonie", id: "knmi_harmonie_arome_netherlands", name: "KNMI HARMONIE", color: "--s6" },
-  { key: "ukmo", id: "ukmo_global_deterministic_10km", name: "UKMO Global 10 km", color: "--s7" },
-];
-const BLEND_COLOR = "--s1";
-
-// the four ERA5 grid points the blend was trained on (southern North Sea corridor)
-const POINTS = [
-  { lat: 52.5, lon: 3.0, name: "Mid-corridor (52.5°N 3.0°E)" },
-  { lat: 52.0, lon: 2.5, name: "Western corridor (52.0°N 2.5°E)" },
-  { lat: 52.0, lon: 4.0, name: "Off the Dutch coast (52.0°N 4.0°E)" },
-  { lat: 53.0, lon: 3.5, name: "Northern corridor (53.0°N 3.5°E)" },
-];
+/* ---------------- location select (POINTS comes from scripts/api.js) ---------------- */
 
 function currentPoint() {
   const saved = localStorage.getItem("ds-point");
@@ -115,90 +92,6 @@ const pad2 = n => String(n).padStart(2, "0");
 const fmtDay = d => `${DAYS[d.getDay()]} ${d.getDate()}`;
 const fmtHour = d => `${pad2(d.getHours())}:00`;
 const fmtFull = d => `${fmtDay(d)} · ${fmtHour(d)}`;
-
-/* ---------------- data fetch ---------------- */
-
-async function fetchJson(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`HTTP ${r.status} from ${new URL(url).host}`);
-  return r.json();
-}
-
-// One call returns all six models; hourly keys come back suffixed with the model id.
-async function fetchWind(point, days = 7) {
-  const ids = MODELS.map(m => m.id).join(",");
-  const url = "https://api.open-meteo.com/v1/forecast" +
-    `?latitude=${point.lat}&longitude=${point.lon}` +
-    "&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m" +
-    `&models=${ids}&wind_speed_unit=ms&timeformat=unixtime&forecast_days=${days}`;
-  const j = await fetchJson(url);
-  const h = j.hourly;
-  // unixtime is timezone-proof; Dates render in the browser's local time
-  const times = h.time.map(t => new Date(t * 1000));
-  const n = times.length;
-  const num = a => (a || []).map(v => (v == null ? null : v));
-
-  const perModel = {};
-  for (const m of MODELS) {
-    perModel[m.key] = {
-      speed: num(h[`wind_speed_10m_${m.id}`]),
-      dir: num(h[`wind_direction_10m_${m.id}`]),
-      gust: num(h[`wind_gusts_10m_${m.id}`]),
-    };
-  }
-
-  const blendSpeed = [], blendDir = [], blendGust = [], spread = [];
-  for (let i = 0; i < n; i++) {
-    blendSpeed.push(weighted(perModel, "speed", BLEND.speed, i));
-    blendGust.push(weighted(perModel, "gust", BLEND.speed, i));
-    blendDir.push(weightedDir(perModel, BLEND.direction, i));
-    const vals = MODELS.map(m => perModel[m.key].speed[i]).filter(Number.isFinite);
-    spread.push(vals.length ? Math.max(...vals) - Math.min(...vals) : null);
-  }
-  return { times, perModel, blendSpeed, blendDir, blendGust, spread };
-}
-
-// weighted mean over the models that reported a value, weights renormalized
-function weighted(perModel, field, weights, i) {
-  let sum = 0, wsum = 0;
-  for (const m of MODELS) {
-    const v = perModel[m.key][field][i];
-    if (Number.isFinite(v)) { sum += weights[m.key] * v; wsum += weights[m.key]; }
-  }
-  return wsum > 0 ? sum / wsum : null;
-}
-
-// direction is circular: blend unit vectors, take the angle of the weighted sum
-function weightedDir(perModel, weights, i) {
-  let x = 0, y = 0, wsum = 0;
-  for (const m of MODELS) {
-    const d = perModel[m.key].dir[i];
-    if (Number.isFinite(d)) {
-      const r = d * Math.PI / 180;
-      x += weights[m.key] * Math.sin(r);
-      y += weights[m.key] * Math.cos(r);
-      wsum += weights[m.key];
-    }
-  }
-  if (wsum === 0 || (x === 0 && y === 0)) return null;
-  return (Math.atan2(x, y) * 180 / Math.PI + 360) % 360;
-}
-
-async function fetchMarine(point, days = 5) {
-  const url = "https://marine-api.open-meteo.com/v1/marine" +
-    `?latitude=${point.lat}&longitude=${point.lon}` +
-    "&hourly=sea_level_height_msl,wave_height,ocean_current_velocity,ocean_current_direction" +
-    `&timeformat=unixtime&forecast_days=${days}`;
-  const j = await fetchJson(url);
-  const h = j.hourly;
-  return {
-    times: h.time.map(t => new Date(t * 1000)),
-    seaLevel: h.sea_level_height_msl || [],
-    waveHeight: h.wave_height || [],
-    currentKt: (h.ocean_current_velocity || []).map(v => (v == null ? null : kmhToKt(v))),
-    currentDir: h.ocean_current_direction || [],
-  };
-}
 
 function nowIndexOf(times) {
   const now = Date.now();
