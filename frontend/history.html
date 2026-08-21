@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DutchSail weather — historical conditions</title>
+<script>(function(){var q=new URLSearchParams(location.search).get("theme");var t=q||localStorage.getItem("ds-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>
+<link rel="stylesheet" href="./assets/style.css">
+<script src="../output/scripts/api.js" defer></script>
+<script src="./assets/common.js" defer></script>
+</head>
+<body>
+
+<header class="site-header"><div class="bar">
+  <a class="brand" href="./index.html">Dutch<span>Sail</span> weather</a>
+  <nav class="site-nav">
+    <a href="./index.html">Overview</a>
+    <a href="./wind.html">Detailed wind</a>
+    <a href="./tidalcurrent.html">Tidal current</a>
+    <a href="./waves.html">Waves</a>
+    <a href="./history.html" aria-current="page">History</a>
+    <a href="./forecast-blend.html">Forecast blend</a>
+    <a href="./route.html">Route</a>
+  </nav>
+  <button class="theme-toggle" type="button">Theme: auto</button>
+</div></header>
+
+<main>
+  <h1 class="page-title">Historical weather conditions</h1>
+  <p class="page-sub">
+    Past weather patterns and historical data for the crossing area.
+  </p>
+
+  <div class="filter-row">
+    <span class="filter-note" id="updated"></span>
+  </div>
+
+  <div id="content" class="loading">
+  </div>
+
+  <div id="status"></div>
+</main>
+
+<footer class="site-footer">Historical data fetched by the Claude agent (<code>agent/run_agent.py</code>).</footer>
+
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  const content = document.getElementById("content");
+  const status = document.getElementById("status");
+
+  try {
+    const s = await fetchAgentSummary();
+    document.getElementById("updated").textContent =
+      `agent run ${fmtFull(new Date(s.generated_at))} · ${s.point.name}`;
+    content.classList.remove("loading");
+  } catch (err) {
+    content.classList.remove("loading");
+    content.hidden = true;
+    statusMsg(status, `No agent data yet (${err.message}). ` +
+      `Run "python agent/run_agent.py" to fetch forecasts and build the graphs.`);
+  }
+});
+</script>
+
+</body>
+</html>
