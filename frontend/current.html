@@ -6,6 +6,7 @@
 <title>DutchSail weather — current conditions</title>
 <script>(function(){var q=new URLSearchParams(location.search).get("theme");var t=q||localStorage.getItem("ds-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="./assets/style.css">
+<script src="../output/scripts/api.js" defer></script>
 <script src="./assets/common.js" defer></script>
 </head>
 <body>
@@ -26,13 +27,12 @@
 <main>
   <h1 class="page-title">Current conditions</h1>
   <p class="page-sub">
-    Live 10&nbsp;m wind from six forecast models, combined with the weights the blend
-    learned against ERA5. Times are shown in your local time.
+    10&nbsp;m wind from six forecast models, combined with the weights the blend
+    learned against ERA5. Fetched and rendered by the Claude agent — refresh it
+    with <code>python agent/run_agent.py</code>.
   </p>
 
   <div class="filter-row">
-    <label for="pt">Location</label>
-    <select id="pt"></select>
     <span class="filter-note" id="updated"></span>
   </div>
 
@@ -46,8 +46,12 @@
           <p class="card-sub">Weighted blend of all six models; the arrows show where the wind blows toward.</p>
         </div>
       </div>
-      <div id="chart24"></div>
-      <div id="dir24"></div>
+      <figure class="fig">
+        <img data-light="../output/figures/agent/wind_next24_light.png"
+             data-dark="../output/figures/agent/wind_next24_dark.png"
+             src="../output/figures/agent/wind_next24_light.png"
+             alt="Blended wind speed for the next 24 hours with direction arrows">
+      </figure>
     </section>
 
     <section class="card" style="margin-top:14px">
@@ -62,65 +66,52 @@
   <div id="status"></div>
 </main>
 
-<footer class="site-footer">Forecast data: Open-Meteo (live) · blend weights: <code>forecast_blend/results/weights.json</code>.</footer>
+<footer class="site-footer">Forecast data fetched by the Claude agent (<code>agent/run_agent.py</code>) · blend weights: <code>forecast_blend/results/weights.json</code>.</footer>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   const content = document.getElementById("content");
   const status = document.getElementById("status");
 
-  async function load(point) {
-    content.classList.add("loading");
-    status.innerHTML = "";
-    try {
-      const data = await fetchWind(point, 3);
-      render(data);
-      content.classList.remove("loading");
-      document.getElementById("updated").textContent =
-        `updated ${fmtHour(new Date())} · ${point.lat.toFixed(1)}°N ${point.lon.toFixed(1)}°E`;
-    } catch (err) {
-      content.classList.remove("loading");
-      statusMsg(status, `Could not load live forecasts (${err.message}).`, () => load(currentPoint()));
-    }
+  try {
+    const s = await fetchAgentSummary();
+    render(s);
+    content.classList.remove("loading");
+    document.getElementById("updated").textContent =
+      `agent run ${fmtFull(new Date(s.generated_at))} · ${s.point.name}`;
+  } catch (err) {
+    content.classList.remove("loading");
+    content.hidden = true;
+    statusMsg(status, `No agent data yet (${err.message}). ` +
+      `Run "python agent/run_agent.py" to fetch forecasts and build the graphs.`);
   }
 
-  function render(d) {
-    const i = nowIndexOf(d.times);
-    const spd = d.blendSpeed[i], dir = d.blendDir[i], gust = d.blendGust[i], spread = d.spread[i];
+  function render(s) {
+    const { speed_ms: spd, dir_deg: dir, gust_ms: gust, spread_ms: spread } = s.now;
 
     const tiles = document.getElementById("tiles");
     tiles.innerHTML = "";
     tiles.append(
-      tile("Blended wind now", spd == null ? "–" :
+      statTile("Blended wind now", !Number.isFinite(spd) ? "–" :
         `<span class="hero-figure">${spd.toFixed(1)}<small>m/s</small></span>`,
-        spd == null ? "" : `${msToKt(spd).toFixed(0)} kt · Beaufort ${beaufort(spd)}`),
-      tile("Direction", dir == null ? "–" :
+        !Number.isFinite(spd) ? "" : `${msToKt(spd).toFixed(0)} kt · Beaufort ${beaufort(spd)}`),
+      statTile("Direction", !Number.isFinite(dir) ? "–" :
         `<span class="dir-arrow" style="transform:rotate(${(dir + 180) % 360}deg)">↑</span> ${compass16(dir)}<small>${Math.round(dir)}°</small>`,
         "meteorological — where the wind comes from"),
-      tile("Gusts", gust == null ? "–" : `${gust.toFixed(1)}<small>m/s</small>`,
-        gust == null ? "" : `${msToKt(gust).toFixed(0)} kt`),
-      tile("Model agreement", spread == null ? "–" : `±${(spread / 2).toFixed(1)}<small>m/s</small>`,
-        spread == null ? "" : (spread < 2 ? "models agree well" : spread < 4 ? "moderate disagreement" : "models disagree — low confidence")),
+      statTile("Gusts", !Number.isFinite(gust) ? "–" : `${gust.toFixed(1)}<small>m/s</small>`,
+        !Number.isFinite(gust) ? "" : `${msToKt(gust).toFixed(0)} kt`),
+      statTile("Model agreement", !Number.isFinite(spread) ? "–" : `±${(spread / 2).toFixed(1)}<small>m/s</small>`,
+        !Number.isFinite(spread) ? "" : (spread < 2 ? "models agree well" : spread < 4 ? "moderate disagreement" : "models disagree — low confidence")),
     );
 
-    // next 24 h from now
-    const from = i, to = Math.min(d.times.length, i + 25);
-    const times = d.times.slice(from, to);
-    lineChart(document.getElementById("chart24"), {
-      times,
-      series: [{ id: "blend", name: "Blend", color: BLEND_COLOR, values: d.blendSpeed.slice(from, to), width: 2.5, endLabel: true }],
-      unit: "m/s", decimals: 1, yMin: 0, nowIndex: 0,
-      ariaLabel: "Blended wind speed, next 24 hours",
-    });
-    directionStrip(document.getElementById("dir24"), times, d.blendDir.slice(from, to), { step: 2, label: "wind" });
-
-    // per-model table at the current hour
+    // per-model table at the agent's run hour
     const tbl = document.getElementById("model-table");
     tbl.innerHTML = "";
     const thead = document.createElement("thead");
     thead.innerHTML = "<tr><th>Model</th><th>Speed (m/s)</th><th>Direction</th><th>Gusts (m/s)</th><th>Weight · speed</th><th>Weight · direction</th></tr>";
     const tbody = document.createElement("tbody");
-    const addRow = (swatchColor, name, s, dd, g, ws, wd, strong) => {
+    const swatches = ["--s2", "--s3", "--s4", "--s5", "--s6", "--s7"];
+    const addRow = (swatchColor, name, sp, dd, g, ws, wd, strong) => {
       const tr = document.createElement("tr");
       const c0 = document.createElement("td");
       const sw = document.createElement("span");
@@ -130,7 +121,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (strong) c0.style.fontWeight = "650";
       tr.append(c0);
       for (const txt of [
-        Number.isFinite(s) ? s.toFixed(1) : "–",
+        Number.isFinite(sp) ? sp.toFixed(1) : "–",
         Number.isFinite(dd) ? `${compass16(dd)} ${Math.round(dd)}°` : "–",
         Number.isFinite(g) ? g.toFixed(1) : "–",
         ws, wd,
@@ -142,33 +133,13 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       tbody.append(tr);
     };
-    for (const m of MODELS) {
-      const pm = d.perModel[m.key];
-      addRow(m.color, m.name, pm.speed[i], pm.dir[i], pm.gust[i],
-        `${(BLEND.speed[m.key] * 100).toFixed(0)}%`, `${(BLEND.direction[m.key] * 100).toFixed(0)}%`);
-    }
-    addRow(BLEND_COLOR, "Blend", spd, dir, gust, "—", "—", true);
+    (s.models || []).forEach((m, i) => {
+      addRow(swatches[i % swatches.length], m.name, m.speed_ms, m.dir_deg, m.gust_ms,
+        `${(m.weight_speed * 100).toFixed(0)}%`, `${(m.weight_direction * 100).toFixed(0)}%`);
+    });
+    addRow("--s1", "Blend", spd, dir, gust, "—", "—", true);
     tbl.append(thead, tbody);
   }
-
-  function tile(label, valueHtml, deltaText) {
-    const div = document.createElement("div");
-    div.className = "tile";
-    const l = document.createElement("div");
-    l.className = "label";
-    l.textContent = label;
-    const v = document.createElement("div");
-    v.className = "value";
-    v.innerHTML = valueHtml;
-    const dl = document.createElement("div");
-    dl.className = "delta";
-    dl.textContent = deltaText;
-    div.append(l, v, dl);
-    return div;
-  }
-
-  initPointSelect(document.getElementById("pt"), load);
-  load(currentPoint());
 });
 </script>
 

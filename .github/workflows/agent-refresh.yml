@@ -1,0 +1,66 @@
+# Runs the Claude agent daily: one API call to Claude, and the agent fetches
+# the forecast data and regenerates every figure + summary.json the site shows.
+# Committing the outputs is what triggers the Vercel redeploy.
+#
+# Required repository secret:  ANTHROPIC_API_KEY
+# Optional repository secret:  COPERNICUSMARINE_CREDENTIALS
+# Setup instructions: agent/README.md → "Automatic refresh (GitHub Actions)".
+
+name: Agent forecast refresh
+
+on:
+  schedule:
+    - cron: "30 5 * * *"   # daily 05:30 UTC — offset from the 11:30 route job
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: agent-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the runner and the libraries the agent uses
+        run: >
+          pip install anthropic requests numpy pandas xarray netcdf4
+          matplotlib copernicusmarine
+
+      - name: Write Copernicus credentials (skipped when the secret is unset)
+        env:
+          CREDS: ${{ secrets.COPERNICUSMARINE_CREDENTIALS }}
+        run: |
+          if [ -n "$CREDS" ]; then
+            mkdir -p credentials
+            printf '%s' "$CREDS" > credentials/.copernicusmarine-credentials
+            echo "Copernicus credentials written"
+          else
+            echo "no COPERNICUSMARINE_CREDENTIALS secret — the agent will skip the map figures"
+          fi
+
+      - name: Run the agent (the one Claude API call)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python agent/run_agent.py
+
+      - name: Commit the refreshed figures and summary
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add output/figures/agent output/results/agent/summary.json
+          if git diff --staged --quiet; then
+            echo "agent outputs unchanged — nothing to commit"
+          else
+            git commit -m "Agent forecast refresh: $(date -u +'%Y-%m-%d %H:%MZ')"
+            git push
+          fi

@@ -45,12 +45,20 @@ def ensure_credentials(credentials_file: Path = CREDENTIALS_FILE) -> Path:
     password = getpass.getpass("Copernicus Marine password: ")
 
     credentials_file.parent.mkdir(parents=True, exist_ok=True)
-    copernicusmarine.login(
+    # copernicusmarine 2.x quirks: login() writes to configuration_file_directory
+    # (credentials_file only controls where subset() READS from), and it returns
+    # False on bad credentials instead of raising — handle both
+    ok = copernicusmarine.login(
         username=username,
         password=password,
-        credentials_file=credentials_file,
+        configuration_file_directory=credentials_file.parent,
         force_overwrite=True,
     )
+    if ok is False or not credentials_file.exists():
+        raise SystemExit(
+            "Copernicus Marine login failed — no credentials file was written. "
+            "Check the username/password and try again."
+        )
     return credentials_file
 
 
