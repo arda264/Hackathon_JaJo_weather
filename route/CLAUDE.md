@@ -187,6 +187,8 @@ falls back to ranking on margin when the P(win) spread is under 2 points.
 ```
 route.py                 # the optimiser (beam search over headings)
 robustness.py            # scenarios, cross-evaluation, KPIs
+fetch_forecast.py        # newest GFS cycle -> forecast/gfs_latest.grb2 (daily, CI)
+daily_forecast.py        # today's route + figures, via xarray/cfgrib not pygrib
 export_sample_route.py   # one route -> ../frontend/data/route-sample.json
 api/index.py             # /api/route endpoint, deployed by the root vercel.json
 main.py, prompts/        # the LLM brief

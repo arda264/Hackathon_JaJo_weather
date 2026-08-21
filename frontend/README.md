@@ -18,9 +18,11 @@ Static site — no build step, no dependencies.
 - **`forecast-blend.html`** — the blend itself: learned weights, held-out metrics
   table, and the evaluation figure.
 - **`route.html`** — the record route, Lowestoft → IJmuiden: the optimised track and
-  sampled wind on a Mapbox map, plus the out-of-sample robustness ranking from
-  `route/app/gribs/robustness.json`. This is the former standalone `dutchsail_route`
-  app, rewritten in this site's vanilla-JS style (the original used React from a CDN).
+  sampled wind on a Mapbox map, today's forecast figure, and the out-of-sample
+  robustness ranking from `route/app/gribs/robustness.json`. This is the former
+  standalone `dutchsail_route` app, rewritten in this site's vanilla-JS style (the
+  original used React from a CDN). The track and the figure are **regenerated daily**
+  by `.github/workflows/daily-forecast.yml` — see "Daily forecast" below.
 
 ## Run
 
@@ -68,6 +70,35 @@ container-based host, or a Vercel function with a custom image), then re-add to
 listed **before** the `**/*` static entry, plus a rewrite from `/api/route`. Check
 the rewrite destination — the legacy builder may want `/route/api/index` without
 the extension.
+
+## Daily forecast
+
+`.github/workflows/daily-forecast.yml` runs at 11:30 UTC every day:
+
+1. `route/fetch_forecast.py` downloads the newest published NOAA GFS 0.25° cycle —
+   just 10 m u/v over the corridor bounding box, ~10 kB for 13 forecast hours, no API
+   key. It walks backwards through cycles until one answers, so a late or skipped run
+   still gets a valid forecast.
+2. `route/daily_forecast.py` re-optimises the route against it and rewrites
+   `frontend/data/route-today.json` plus `output/figures/daily/forecast_route_{light,dark}.png`.
+3. The job commits those files, which is what triggers a Vercel redeploy.
+
+Yesterday's outputs are **replaced, not archived** — the paths are fixed, so the page
+never needs to know today's date. Run it by hand with the **Actions → Daily forecast
+route → Run workflow** button, or locally:
+
+```
+python route/fetch_forecast.py && python route/daily_forecast.py
+```
+
+The daily job deliberately avoids `pygrib`: `daily_forecast.py` reads GRIB through
+xarray/cfgrib (binary wheels, no system ECCODES) and injects its own `wind_at` into
+`route.route`, so the optimiser never imports a GRIB library. That is why this runs
+in CI when the Vercel function could not.
+
+Each run commits ~210 kB of PNG, so the repo grows roughly 75 MB/year. If that
+becomes a problem, drop the figure DPI in `daily_forecast.py` or render the chart
+client-side from `route-today.json` instead.
 
 ## Notes
 

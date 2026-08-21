@@ -3,3 +3,4 @@ wind_data/
 .agents/
 .claude/
 frontend/assets/mapbox-token.js
+route/forecast/gfs_latest.grb2

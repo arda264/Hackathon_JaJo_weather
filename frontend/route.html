@@ -126,6 +126,27 @@
   </section>
 
   <section>
+    <h2>Today's forecast run</h2>
+    <p class="section-sub">
+      Redrawn every morning by <code>route/daily_forecast.py</code> from the newest NOAA
+      GFS cycle: the optimised track over the forecast wind field, and the wind and boat
+      speed the optimiser expects along it. Yesterday's figure is replaced, not archived.
+    </p>
+    <div class="fig-grid wide">
+      <figure class="fig">
+        <img data-light="../output/figures/daily/forecast_route_light.png"
+             data-dark="../output/figures/daily/forecast_route_dark.png"
+             src="../output/figures/daily/forecast_route_light.png"
+             alt="Optimised Lowestoft to IJmuiden track over the GFS forecast wind field, with wind and boat speed along the track"
+             loading="lazy">
+        <figcaption id="daily-fig-caption">
+          Optimised track and the wind it was optimised against.
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
     <h2>Brief</h2>
     <p class="section-sub">
       Written by the LLM layer from the scenario KPIs. It narrates the distribution — it
@@ -182,7 +203,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // rejects Mapbox tokens committed to this repo. See assets/mapbox-token.example.js.
   const MAPBOX_TOKEN = window.MAPBOX_TOKEN || "";
   const MAP_STYLE = "mapbox://styles/kkataev/cmraz121a000901pcc8fhgkzv";
-  const SAMPLE_URL = "./data/route-sample.json";
+  const TODAY_URL = "./data/route-today.json";     // rewritten daily by CI
+  const SAMPLE_URL = "./data/route-sample.json";   // last-resort synthetic fallback
   const ROBUSTNESS_URL = "../route/app/gribs/robustness.json";
   const SUMMARY_URL = "../route/app/gribs/summary.json";
   const API_URL = "/api/route";
@@ -349,39 +371,68 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  async function load(current) {
+  const fmtCycle = iso => {
+    const d = new Date(iso);
+    return Number.isNaN(+d) ? iso
+      : `${d.toUTCString().slice(5, 16)} ${String(d.getUTCHours()).padStart(2, "0")}:00 UTC`;
+  };
+
+  // stored → today's CI-generated route first, synthetic sample only if that is missing
+  async function fetchStoredRoute() {
+    for (const url of [TODAY_URL, SAMPLE_URL]) {
+      try {
+        const res = await fetch(url);
+        if (res.ok) return await res.json();
+      } catch { /* try the next one */ }
+    }
+    return null;
+  }
+
+  async function load(current, { live = false } = {}) {
     buttonEl.disabled = true;
     statusEl.innerHTML = "";
-    noteEl.textContent = "optimising…";
+    noteEl.textContent = live ? "optimising…" : "loading…";
     bannerEl.hidden = true;
 
-    let data, live = true;
-    try {
-      data = await fetchLiveRoute(current);
-    } catch (err) {
-      live = false;
+    let data = null, wasLive = false;
+    if (live) {
       try {
-        data = await (await fetch(SAMPLE_URL)).json();
-      } catch {
-        noteEl.textContent = "";
-        buttonEl.disabled = false;
-        statusMsg(statusEl, "Could not reach the optimiser and no stored sample route is available.",
-          () => load(readCurrent()));
-        return;
-      }
+        data = await fetchLiveRoute(current);
+        wasLive = true;
+      } catch { /* fall through to the stored route */ }
+    }
+    if (!data) data = await fetchStoredRoute();
+    if (!data) {
+      noteEl.textContent = "";
+      buttonEl.disabled = false;
+      statusMsg(statusEl, "No route available — neither the live optimiser nor a stored route could be loaded.",
+        () => load(readCurrent(), { live }));
+      return;
     }
 
     lastRoute = data;
     renderTiles(data);
-    if (live) {
+
+    if (wasLive) {
       noteEl.textContent = `computed for ${current.speed} kt toward ${current.toward}°`;
+    } else if (data.source === "gfs") {
+      noteEl.textContent = `GFS ${fmtCycle(data.cycle)}`;
+      const cap = document.getElementById("daily-fig-caption");
+      if (cap) cap.textContent =
+        `GFS ${fmtCycle(data.cycle)} — ${data.reached_destination
+          ? `${hoursToHM(data.duration_hours)} to IJmuiden`
+          : `stopped ${data.remaining_nm.toFixed(1)} nm short`}.`;
+      bannerEl.hidden = false;
+      bannerEl.innerHTML =
+        `<strong>Today's route.</strong> Optimised against NOAA GFS ` +
+        `${fmtCycle(data.cycle)} and regenerated every day. The current vector below only ` +
+        `takes effect with a live optimiser, which is not deployed.`;
     } else {
       noteEl.textContent = "stored sample";
       bannerEl.hidden = false;
       bannerEl.innerHTML =
-        "<strong>Showing a stored sample route.</strong> The live optimiser runs as a Python " +
-        "function at <code>/api/route</code>, which only exists on the deployed site — the " +
-        "current vector below has no effect here. " + (data.note || "");
+        "<strong>Showing a stored sample route.</strong> Today's forecast route could not be " +
+        "loaded, so this is the synthetic fallback. " + (data.note || "");
     }
 
     try {
@@ -398,7 +449,7 @@ document.addEventListener("DOMContentLoaded", () => {
     toward: Number(document.getElementById("cur-toward").value),
   });
 
-  buttonEl.addEventListener("click", () => load(readCurrent()));
+  buttonEl.addEventListener("click", () => load(readCurrent(), { live: true }));
 
   /* ---------------- brief ---------------- */
 
