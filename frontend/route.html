@@ -6,7 +6,7 @@
 <title>DutchSail weather — record route</title>
 <script>(function(){var q=new URLSearchParams(location.search).get("theme");var t=q||localStorage.getItem("ds-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="./assets/style.css">
-<script src="./scripts/api.js" defer></script>
+<script src="../output/scripts/api.js" defer></script>
 <script src="./assets/common.js" defer></script>
 <link href="https://api.mapbox.com/mapbox-gl-js/v3.26.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.26.0/mapbox-gl.js"></script>
@@ -346,7 +346,7 @@ document.addEventListener("DOMContentLoaded", () => {
     map.fitBounds(bounds, { padding: 60, duration: 0 });
   }
 
-  /* ---------------- data — all fetching lives in scripts/api.js ---------------- */
+  /* ---------------- data — all fetching lives in output/scripts/api.js ---------------- */
 
   const fmtCycle = iso => {
     const d = new Date(iso);

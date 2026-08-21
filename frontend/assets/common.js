@@ -1,6 +1,6 @@
 /* DutchSail weather frontend — shared UI helpers and chart component.
  * All data access (constants, endpoints, fetch functions) lives in
- * scripts/api.js — include that first; nothing in this file calls fetch(). */
+ * output/scripts/api.js — include that first; nothing in this file calls fetch(). */
 "use strict";
 
 /* ---------------- theme ---------------- */
@@ -49,7 +49,7 @@ function initChrome() {
   swap();
 }
 
-/* ---------------- location select (POINTS comes from scripts/api.js) ---------------- */
+/* ---------------- location select (POINTS comes from output/scripts/api.js) ---------------- */
 
 function currentPoint() {
   const saved = localStorage.getItem("ds-point");

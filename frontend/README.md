@@ -89,11 +89,11 @@ the extension.
 Every network call the site makes, verified live on 2026-08-21. All external
 calls are keyless except Mapbox.
 
-**All data fetching lives in `scripts/api.js`** — the single data-access layer.
+**All data fetching lives in `output/scripts/api.js`** — the single data-access layer.
 Pages and `assets/common.js` never call `fetch()` directly; they call the
 functions below (`fetchWind`, `fetchMarine`, `fetchLiveRoute`, `fetchStoredRoute`,
 `fetchRouteSummary`, `fetchRobustness`). To change an endpoint, a parameter, or a
-fallback order, change `scripts/api.js`. The only network activity outside it is
+fallback order, change `output/scripts/api.js`. The only network activity outside it is
 the Mapbox GL library `<script>`/`<link>` in `route.html`'s head and the tiles
 that library loads itself.
 
@@ -101,8 +101,8 @@ that library loads itself.
 
 | Call | Made by | What / how |
 | --- | --- | --- |
-| `GET https://api.open-meteo.com/v1/forecast` | `index.html` (7 d), `wind.html` (7 d), `current.html` (3 d) via `fetchWind()` in `scripts/api.js` | Hourly `wind_speed_10m`, `wind_direction_10m`, `wind_gusts_10m` for **all six models in one request** (`models=ecmwf_ifs025,gfs_global,icon_eu,meteofrance_arpege_europe,knmi_harmonie_arome_netherlands,ukmo_global_deterministic_10km`); `wind_speed_unit=ms`, `timeformat=unixtime`. Response keys come back suffixed per model (18 hourly arrays). One call per page load and per location change. No key. |
-| `GET https://marine-api.open-meteo.com/v1/marine` | `tide.html` (5 d) via `fetchMarine()` in `scripts/api.js` | Hourly `sea_level_height_msl`, `wave_height`, `ocean_current_velocity`, `ocean_current_direction`; `timeformat=unixtime`. The API returns current velocity in **km/h**; the page converts to knots. No key. |
+| `GET https://api.open-meteo.com/v1/forecast` | `index.html` (7 d), `wind.html` (7 d), `current.html` (3 d) via `fetchWind()` in `output/scripts/api.js` | Hourly `wind_speed_10m`, `wind_direction_10m`, `wind_gusts_10m` for **all six models in one request** (`models=ecmwf_ifs025,gfs_global,icon_eu,meteofrance_arpege_europe,knmi_harmonie_arome_netherlands,ukmo_global_deterministic_10km`); `wind_speed_unit=ms`, `timeformat=unixtime`. Response keys come back suffixed per model (18 hourly arrays). One call per page load and per location change. No key. |
+| `GET https://marine-api.open-meteo.com/v1/marine` | `tide.html` (5 d) via `fetchMarine()` in `output/scripts/api.js` | Hourly `sea_level_height_msl`, `wave_height`, `ocean_current_velocity`, `ocean_current_direction`; `timeformat=unixtime`. The API returns current velocity in **km/h**; the page converts to knots. No key. |
 | `GET https://api.mapbox.com/mapbox-gl-js/v3.26.0/mapbox-gl.{js,css}` | `route.html` `<head>` | Mapbox GL library from the CDN — the site's only external script. If blocked, the map degrades to a message; the rest of the page still works. |
 | Mapbox style + tile requests (`api.mapbox.com`, `events.mapbox.com`) | Mapbox GL at runtime on `route.html` | Loads `mapbox://styles/mapbox/outdoors-v12` plus its vector tiles, sprites, and glyphs, authenticated with the `pk.` token from `assets/mapbox-token.js`. Skipped entirely when no token is configured. |
 
@@ -110,11 +110,11 @@ that library loads itself.
 
 | Call | Made by | What / how |
 | --- | --- | --- |
-| `POST /api/route` (JSON `{current}`, 45 s timeout) | `route.html` **Update route** button via `fetchLiveRoute()` in `scripts/api.js` | The live optimiser. **Not deployed** (see above) — the request fails and the page falls back to the stored route, with a banner. |
-| `GET frontend/data/route-today.json` | `route.html` on load via `fetchStoredRoute()` in `scripts/api.js` | Today's optimised route, rewritten daily by CI. |
-| `GET frontend/data/route-sample.json` | `route.html` fallback via `fetchStoredRoute()` in `scripts/api.js` | Synthetic sample route, used only when `route-today.json` is missing and the API errors. |
-| `GET route/app/gribs/summary.json` | `route.html` on load via `fetchRouteSummary()` in `scripts/api.js` | Forecast-cycle metadata for the header line. |
-| `GET route/app/gribs/robustness.json` | `route.html` on load via `fetchRobustness()` in `scripts/api.js` | Out-of-sample robustness ranking table. |
+| `POST /api/route` (JSON `{current}`, 45 s timeout) | `route.html` **Update route** button via `fetchLiveRoute()` in `output/scripts/api.js` | The live optimiser. **Not deployed** (see above) — the request fails and the page falls back to the stored route, with a banner. |
+| `GET frontend/data/route-today.json` | `route.html` on load via `fetchStoredRoute()` in `output/scripts/api.js` | Today's optimised route, rewritten daily by CI. |
+| `GET frontend/data/route-sample.json` | `route.html` fallback via `fetchStoredRoute()` in `output/scripts/api.js` | Synthetic sample route, used only when `route-today.json` is missing and the API errors. |
+| `GET route/app/gribs/summary.json` | `route.html` on load via `fetchRouteSummary()` in `output/scripts/api.js` | Forecast-cycle metadata for the header line. |
+| `GET route/app/gribs/robustness.json` | `route.html` on load via `fetchRobustness()` in `output/scripts/api.js` | Out-of-sample robustness ranking table. |
 
 The generated figures (`output/figures/…`, PNG) are loaded as plain `<img>`
 elements, not fetches.
@@ -156,7 +156,7 @@ client-side from `route-today.json` instead.
 
 ## Notes
 
-- Blend weights are embedded in `scripts/api.js`; re-copy them from
+- Blend weights are embedded in `output/scripts/api.js`; re-copy them from
   `forecast_blend/results/weights.json` after retraining.
 - Locations are the four ERA5 grid points the blend was trained on.
 - Theme toggle cycles auto → light → dark (persisted in `localStorage`).

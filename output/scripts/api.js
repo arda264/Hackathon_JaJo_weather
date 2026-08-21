@@ -1,11 +1,14 @@
-/* DutchSail weather frontend — the data-access layer.
+/* DutchSail weather — the data-access layer, in output/scripts with the rest
+ * of the project's scripts.
  *
  * Every network request the site makes goes through this file; pages and
- * assets/common.js never call fetch() themselves. To change an endpoint,
- * a parameter, or a fallback order, change it here.
+ * frontend/assets/common.js never call fetch() themselves. To change an
+ * endpoint, a parameter, or a fallback order, change it here.
  *
- * Load order in each page: this file first, then assets/common.js, both
- * deferred (fetchMarine uses kmhToKt from common.js at call time).
+ * Each page loads this first (as ../output/scripts/api.js), then
+ * assets/common.js, both deferred (fetchMarine uses kmhToKt from common.js at
+ * call time). Relative route URLs below resolve against the page in
+ * frontend/, not against this file's location.
  */
 "use strict";
 
